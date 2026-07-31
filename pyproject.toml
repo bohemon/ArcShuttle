@@ -27,6 +27,7 @@ path = "src/parxtract/__init__.py"
 include = [
   "/src",
   "/powershell",
+  "/tests",
   "/LICENSE",
 ]
 
@@ -35,3 +36,37 @@ packages = ["src/parxtract"]
 
 [tool.hatch.build.targets.wheel.force-include]
 "powershell/Parxtract.psm1" = "parxtract/powershell/Parxtract.psm1"
+
+[tool.hatch.envs.default]
+dependencies = [
+  "pytest>=8",
+  "pytest-timeout>=2.4",
+  "ruff>=0.16.1",
+]
+
+[tool.hatch.envs.default.scripts]
+test = "pytest {args:tests}"
+test-verbose = "pytest -vv {args:tests}"
+lint = "ruff check {args:.}"
+format = "ruff check --fix {args:.} && ruff format {args:.}"
+format-check = "ruff format --check {args:.}"
+check = [
+  "ruff check .",
+  "ruff format --check .",
+  "pytest tests",
+]
+
+[tool.pytest.ini_options]
+addopts = ["--strict-config", "--strict-markers"]
+testpaths = ["tests"]
+timeout = 30
+timeout_method = "thread"
+session_timeout = 180
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = ["E501"]
