@@ -93,7 +93,7 @@ def test_success_verifies_then_commits_and_preserves_source(tmp_path: Path) -> N
 
     result = results[0]
     assert (code, result["status"], summary["success"]) == (0, "success", 1)
-    assert result["create_exit_code"] == result["test_exit_code"] == 0
+    assert result["create_exit_code"] == result["verification_exit_code"] == 0
     assert Path(result["output_dir"]).read_bytes() == b"archive"
     assert result["staging_dir"] is None
     assert (source / "nested" / "empty").is_dir()
@@ -148,7 +148,7 @@ def test_verification_warning_failure_and_interrupt_retain_staging(
     results, _, actual_code = execute_manifest([job], config, runner)
 
     result = results[0]
-    assert (actual_code, result["status"], result["test_exit_code"]) == (
+    assert (actual_code, result["status"], result["verification_exit_code"]) == (
         code,
         status,
         outcome.exit_code,

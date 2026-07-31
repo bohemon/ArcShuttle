@@ -20,6 +20,8 @@ def job_result(
     staging_path: str | None,
     log_path: str | None,
     warnings: list[str],
+    create_exit_code: int | None = None,
+    verification_exit_code: int | None = None,
 ) -> dict[str, Any]:
     """Build a schema-compatible result record for one normalized job."""
 
@@ -45,6 +47,11 @@ def job_result(
     }
     if schema_version == 2:
         result["operation"] = job["operation"]
+        result["output_path"] = output_path
+        result["staging_path"] = staging_path
+        if job["operation"] == "create":
+            result["create_exit_code"] = create_exit_code
+            result["verification_exit_code"] = verification_exit_code
     return result
 
 
