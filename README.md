@@ -2,6 +2,8 @@
 
 `parxtract` is a Python 3.11+ command-line tool that safely extracts many independent archives through the 7-Zip CLI. It schedules small archives across processes while reserving weighted CPU tokens for large archives whose internal structure can benefit from 7-Zip threads. The same Python scheduler is used on Windows and Linux; the PowerShell module only converts object pipelines to and from JSON Lines.
 
+For the normative, human/AI-readable command reference in Japanese, see [`docs/COMMAND_MANUAL.ja.md`](docs/COMMAND_MANUAL.ja.md).
+
 Version 1 never deletes source archives, overwrites an existing output, searches for passwords, or recursively extracts nested archives.
 
 ## Requirements and installation
