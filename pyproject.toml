@@ -26,8 +26,12 @@ path = "src/parxtract/__init__.py"
 [tool.hatch.build.targets.sdist]
 include = [
   "/src",
+  "/powershell",
   "/LICENSE",
 ]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/parxtract"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"powershell/Parxtract.psm1" = "parxtract/powershell/Parxtract.psm1"
