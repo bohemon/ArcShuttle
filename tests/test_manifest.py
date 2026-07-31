@@ -11,11 +11,11 @@ from arcshuttle.inspect import Inspection
 from arcshuttle.manifest import (
     calculate_integrity,
     deterministic_job_id,
-    make_plan,
     source_identity,
     validate_manifest,
 )
 from arcshuttle.multipart import MultipartInfo
+from arcshuttle.operations.extract import make_legacy_plan
 from arcshuttle.sevenzip import InspectionResult
 from arcshuttle.util import UsageError
 
@@ -26,7 +26,7 @@ def no_inspection(path: Path, timeout: float) -> InspectionResult:
 
 def plan_one(path: Path, **config_changes: object) -> tuple[dict[str, object], Config]:
     config = replace(Config(), inspect_threshold=10_000, small_threshold=10_000, **config_changes)
-    result = make_plan([MultipartInfo(path, False)], config, no_inspection)
+    result = make_legacy_plan([MultipartInfo(path, False)], config, no_inspection)
     assert result.errors == []
     return result.jobs[0], config
 
@@ -149,7 +149,7 @@ def test_output_collision(tmp_path: Path) -> None:
     two.write_bytes(b"2")
     config = replace(Config(), inspect_threshold=100, small_threshold=100)
 
-    result = make_plan(
+    result = make_legacy_plan(
         [MultipartInfo(one, False), MultipartInfo(two, False)], config, no_inspection
     )
 
@@ -173,7 +173,7 @@ def test_inspection_failure_is_conservative(tmp_path: Path) -> None:
     archive.write_bytes(b"large")
     config = replace(Config(), inspect_threshold=0, small_threshold=1)
 
-    result = make_plan(
+    result = make_legacy_plan(
         [MultipartInfo(archive, False)],
         config,
         lambda path, timeout: InspectionResult(Inspection(format="7z"), "timeout", True),

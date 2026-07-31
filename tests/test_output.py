@@ -4,10 +4,10 @@ from pathlib import Path
 
 import pytest
 
-from arcshuttle.output import (
+from arcshuttle.operations.extract import default_output_path
+from arcshuttle.staging import (
     create_staging,
-    default_output_path,
-    finalize,
+    finalize_directory,
     resolve_existing,
     retain_failed,
 )
@@ -35,7 +35,7 @@ def test_successful_finalization_removes_marker(tmp_path: Path) -> None:
     staging = create_staging(final, "abcdef")
     (staging / "file.txt").write_text("ok")
 
-    finalize(staging, final)
+    finalize_directory(staging, final)
 
     assert (final / "file.txt").is_file()
     assert not (final / ".arcshuttle-owned").exists()

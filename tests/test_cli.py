@@ -8,8 +8,8 @@ import pytest
 
 from arcshuttle import cli, compat
 from arcshuttle.config import Config
-from arcshuttle.manifest import make_plan
 from arcshuttle.multipart import MultipartInfo
+from arcshuttle.operations.extract import make_legacy_plan
 from arcshuttle.sevenzip import ProcessOutcome
 
 
@@ -60,8 +60,28 @@ def test_plan_outputs_only_json_lines_to_stdout(
 
     assert code == 0
     record = json.loads(captured.out)
+    assert record["schema_version"] == 1
+    assert "operation" not in record
     assert record["path"] == str(archive.resolve())
     assert "7-Zip" in captured.err
+
+
+def test_arcshuttle_plan_extract_outputs_schema_v2(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    archive = tmp_path / "schema-v2.zip"
+    archive.write_bytes(b"zip")
+    patch_sevenzip(monkeypatch, PlanningSevenZip())
+
+    code = cli.main(["plan", "extract", "--small-threshold", "1M", str(archive)])
+    captured = capsys.readouterr()
+    record = json.loads(captured.out)
+
+    assert code == 0
+    assert record["schema_version"] == 2
+    assert record["operation"] == "extract"
+    assert record["source"]["path"] == str(archive.resolve())
+    assert record["destination"]["kind"] == "directory"
 
 
 def test_no_implicit_stdin(
@@ -157,7 +177,7 @@ def test_plan_filter_run_contract_emits_result_then_summary(
     archive = tmp_path / "archive.zip"
     archive.write_bytes(b"zip")
     config = Config(output_dir=tmp_path / "out", inspect_threshold=1000, small_threshold=1000)
-    planning = make_plan([MultipartInfo(archive, False)], config, PlanningSevenZip().inspect)
+    planning = make_legacy_plan([MultipartInfo(archive, False)], config, PlanningSevenZip().inspect)
     planning.jobs[0]["tags"] = ["filtered"]
     manifest = tmp_path / "plan.jsonl"
     manifest.write_text(json.dumps(planning.jobs[0]) + "\n", encoding="utf-8")
@@ -197,3 +217,29 @@ def test_extract_convenience_command(
 
     assert (code, records[0]["status"]) == (0, "success")
     assert (tmp_path / "out" / "archive" / "payload.txt").is_file()
+
+
+def test_arcshuttle_extract_executes_schema_v2(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    archive = tmp_path / "archive.zip"
+    archive.write_bytes(b"zip")
+    patch_sevenzip(monkeypatch, FullSevenZip())
+
+    code = cli.main(
+        [
+            "extract",
+            "--quiet",
+            "--output-dir",
+            str(tmp_path / "out"),
+            "--log-dir",
+            str(tmp_path / "logs"),
+            str(archive),
+        ]
+    )
+    records = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
+
+    assert code == 0
+    assert records[0]["schema_version"] == 2
+    assert records[0]["operation"] == "extract"
+    assert records[-1]["schema_version"] == 2
