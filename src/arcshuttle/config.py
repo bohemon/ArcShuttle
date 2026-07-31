@@ -37,24 +37,28 @@ class Config:
 
 
 _ENV_NAMES = {
-    "sevenzip": "PARXTRACT_7Z",
-    "output_dir": "PARXTRACT_OUTPUT_DIR",
-    "existing": "PARXTRACT_EXISTING",
-    "cpu_budget": "PARXTRACT_CPU_BUDGET",
-    "max_processes": "PARXTRACT_MAX_PROCESSES",
-    "storage_profile": "PARXTRACT_STORAGE_PROFILE",
-    "io_slots": "PARXTRACT_IO_SLOTS",
-    "heavy_threads": "PARXTRACT_HEAVY_THREADS",
-    "small_threshold": "PARXTRACT_SMALL_THRESHOLD",
-    "inspect_threshold": "PARXTRACT_INSPECT_THRESHOLD",
-    "inspect_timeout": "PARXTRACT_INSPECT_TIMEOUT",
-    "reservation_delay": "PARXTRACT_RESERVATION_DELAY",
-    "sequential_if_total_below": "PARXTRACT_SEQUENTIAL_IF_TOTAL_BELOW",
-    "log_dir": "PARXTRACT_LOG_DIR",
-    "quiet": "PARXTRACT_QUIET",
-    "fail_fast": "PARXTRACT_FAIL_FAST",
-    "allow_changed": "PARXTRACT_ALLOW_CHANGED",
-    "on_input_error": "PARXTRACT_ON_INPUT_ERROR",
+    "sevenzip": "ARCSHUTTLE_7Z",
+    "output_dir": "ARCSHUTTLE_OUTPUT_DIR",
+    "existing": "ARCSHUTTLE_EXISTING",
+    "cpu_budget": "ARCSHUTTLE_CPU_BUDGET",
+    "max_processes": "ARCSHUTTLE_MAX_PROCESSES",
+    "storage_profile": "ARCSHUTTLE_STORAGE_PROFILE",
+    "io_slots": "ARCSHUTTLE_IO_SLOTS",
+    "heavy_threads": "ARCSHUTTLE_HEAVY_THREADS",
+    "small_threshold": "ARCSHUTTLE_SMALL_THRESHOLD",
+    "inspect_threshold": "ARCSHUTTLE_INSPECT_THRESHOLD",
+    "inspect_timeout": "ARCSHUTTLE_INSPECT_TIMEOUT",
+    "reservation_delay": "ARCSHUTTLE_RESERVATION_DELAY",
+    "sequential_if_total_below": "ARCSHUTTLE_SEQUENTIAL_IF_TOTAL_BELOW",
+    "log_dir": "ARCSHUTTLE_LOG_DIR",
+    "quiet": "ARCSHUTTLE_QUIET",
+    "fail_fast": "ARCSHUTTLE_FAIL_FAST",
+    "allow_changed": "ARCSHUTTLE_ALLOW_CHANGED",
+    "on_input_error": "ARCSHUTTLE_ON_INPUT_ERROR",
+}
+
+_LEGACY_ENV_NAMES = {
+    name: env_name.replace("ARCSHUTTLE_", "PARXTRACT_", 1) for name, env_name in _ENV_NAMES.items()
 }
 
 _SIZE_FIELDS = {"small_threshold", "inspect_threshold", "sequential_if_total_below"}
@@ -99,6 +103,14 @@ def _coerce(name: str, value: Any) -> Any:
         raise UsageError(f"invalid value for {name}: {value!r}") from exc
 
 
+def _validate_toml_values(values: Mapping[str, Any], source: str) -> dict[str, Any]:
+    known = set(asdict(Config()))
+    unknown = set(values) - known
+    if unknown:
+        raise UsageError(f"unknown config option(s) in {source}: {', '.join(sorted(unknown))}")
+    return dict(values)
+
+
 def _read_toml(path: Path | None) -> dict[str, Any]:
     if path is None:
         return {}
@@ -107,14 +119,18 @@ def _read_toml(path: Path | None) -> dict[str, Any]:
             loaded = tomllib.load(stream)
     except (OSError, tomllib.TOMLDecodeError) as exc:
         raise UsageError(f"cannot read config {path}: {exc}") from exc
-    section = loaded.get("parxtract", loaded)
-    if not isinstance(section, dict):
-        raise UsageError("config [parxtract] section must be a table")
-    known = set(asdict(Config()))
-    unknown = set(section) - known
-    if unknown:
-        raise UsageError(f"unknown config option(s): {', '.join(sorted(unknown))}")
-    return dict(section)
+    values = _validate_toml_values(
+        {name: value for name, value in loaded.items() if name not in {"parxtract", "arcshuttle"}},
+        "config root",
+    )
+    for section_name in ("parxtract", "arcshuttle"):
+        if section_name not in loaded:
+            continue
+        section = loaded[section_name]
+        if not isinstance(section, dict):
+            raise UsageError(f"config [{section_name}] section must be a table")
+        values.update(_validate_toml_values(section, f"config [{section_name}]"))
+    return values
 
 
 def resolve_config(
@@ -129,6 +145,9 @@ def resolve_config(
     toml_values = _read_toml(config_path)
     values.update(toml_values)
     env = os.environ if environ is None else environ
+    for name, env_name in _LEGACY_ENV_NAMES.items():
+        if env_name in env:
+            values[name] = env[env_name]
     for name, env_name in _ENV_NAMES.items():
         if env_name in env:
             values[name] = env[env_name]
@@ -138,7 +157,12 @@ def resolve_config(
     values = {name: _coerce(name, value) for name, value in values.items()}
 
     def explicitly_set(name: str) -> bool:
-        return cli_values.get(name) is not None or _ENV_NAMES[name] in env or name in toml_values
+        return (
+            cli_values.get(name) is not None
+            or _ENV_NAMES[name] in env
+            or _LEGACY_ENV_NAMES[name] in env
+            or name in toml_values
+        )
 
     if not explicitly_set("max_processes"):
         values["max_processes"] = min(4, values["cpu_budget"])

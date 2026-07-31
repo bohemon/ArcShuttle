@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from parxtract.config import resolve_config
-from parxtract.util import parse_size
+from arcshuttle.config import resolve_config
+from arcshuttle.util import parse_size
 
 
 @pytest.mark.parametrize(
@@ -32,6 +32,44 @@ def test_cli_environment_toml_precedence(tmp_path: Path) -> None:
     assert config.max_processes == 4
     assert config.sevenzip == "from-env"
     assert config.small_threshold == 20 * 1024 * 1024
+
+
+def test_new_names_override_legacy_configuration(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(
+        "small_threshold = '1M'\n"
+        "[parxtract]\nsmall_threshold = '2M'\nsevenzip = 'legacy-file'\n"
+        "[arcshuttle]\nsmall_threshold = '3M'\nsevenzip = 'new-file'\n",
+        encoding="utf-8",
+    )
+
+    config = resolve_config(
+        {"small_threshold": "6M"},
+        config_path=config_path,
+        environ={
+            "PARXTRACT_SMALL_THRESHOLD": "4M",
+            "ARCSHUTTLE_SMALL_THRESHOLD": "5M",
+            "PARXTRACT_7Z": "legacy-env",
+            "ARCSHUTTLE_7Z": "new-env",
+        },
+    )
+
+    assert config.small_threshold == 6 * 1024 * 1024
+    assert config.sevenzip == "new-env"
+
+
+def test_legacy_root_toml_and_environment_remain_supported(tmp_path: Path) -> None:
+    config_path = tmp_path / "legacy.toml"
+    config_path.write_text("small_threshold = '7M'\n", encoding="utf-8")
+
+    config = resolve_config(
+        {},
+        config_path=config_path,
+        environ={"PARXTRACT_7Z": "legacy-env"},
+    )
+
+    assert config.small_threshold == 7 * 1024 * 1024
+    assert config.sevenzip == "legacy-env"
 
 
 def test_storage_profile_default_slots() -> None:

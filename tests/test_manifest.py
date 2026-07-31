@@ -6,12 +6,12 @@ from pathlib import Path
 
 import pytest
 
-from parxtract.config import Config
-from parxtract.inspect import Inspection
-from parxtract.manifest import calculate_integrity, make_plan, validate_manifest
-from parxtract.multipart import MultipartInfo
-from parxtract.sevenzip import InspectionResult
-from parxtract.util import UsageError
+from arcshuttle.config import Config
+from arcshuttle.inspect import Inspection
+from arcshuttle.manifest import calculate_integrity, make_plan, validate_manifest
+from arcshuttle.multipart import MultipartInfo
+from arcshuttle.sevenzip import InspectionResult
+from arcshuttle.util import UsageError
 
 
 def no_inspection(path: Path, timeout: float) -> InspectionResult:

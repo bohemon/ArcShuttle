@@ -7,11 +7,11 @@ from pathlib import Path
 
 import pytest
 
-from parxtract.cli import execute_manifest
-from parxtract.config import Config
-from parxtract.manifest import make_plan, validate_manifest
-from parxtract.multipart import MultipartInfo
-from parxtract.sevenzip import SevenZip
+from arcshuttle.cli import execute_manifest
+from arcshuttle.config import Config
+from arcshuttle.manifest import make_plan, validate_manifest
+from arcshuttle.multipart import MultipartInfo
+from arcshuttle.sevenzip import SevenZip
 
 
 def test_inspect_extract_logs_threads_and_unicode_paths(

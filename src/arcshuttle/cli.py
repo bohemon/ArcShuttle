@@ -1,4 +1,4 @@
-"""Command-line interface and orchestration for parxtract."""
+"""Command-line interface and orchestration for ArcShuttle."""
 
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ from .util import UsageError, emit_jsonl, isoformat, read_json_lines, utc_now
 
 
 class Parser(argparse.ArgumentParser):
-    """Argument parser that maps usage failures to parxtract exit code 64."""
+    """Argument parser that maps usage failures to ArcShuttle exit code 64."""
 
     def error(self, message: str) -> None:
         raise UsageError(message)
@@ -57,11 +57,14 @@ def _add_input(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--files0-from", metavar="FILE")
 
 
-def build_parser() -> argparse.ArgumentParser:
+def build_parser(*, program_name: str = "arcshuttle") -> argparse.ArgumentParser:
     """Build the public CLI parser."""
 
-    parser = Parser(prog="parxtract", description="Parallel safe extraction backed by 7-Zip")
-    parser.add_argument("--version", action="version", version="parxtract 0.1.0")
+    parser = Parser(
+        prog=program_name,
+        description="Resource-aware archive creation and extraction backed by 7-Zip",
+    )
+    parser.add_argument("--version", action="version", version=f"{program_name} 0.2.0")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     plan = subparsers.add_parser("plan", help="inspect inputs and emit a JSON Lines manifest")
@@ -93,9 +96,12 @@ def _open_manifest(path: str) -> tuple[TextIO, bool]:
         raise UsageError(f"cannot read manifest {path}: {exc}") from exc
 
 
-def _show_sevenzip(sevenzip: SevenZip, quiet: bool) -> None:
+def _show_sevenzip(sevenzip: SevenZip, quiet: bool, program_name: str) -> None:
     if not quiet:
-        print(f"parxtract: 7-Zip: {sevenzip.executable} ({sevenzip.version()})", file=sys.stderr)
+        print(
+            f"{program_name}: 7-Zip: {sevenzip.executable} ({sevenzip.version()})",
+            file=sys.stderr,
+        )
 
 
 def _plan(
@@ -159,6 +165,7 @@ def _execute_job(
     run_id: str,
     log_root: Path,
     progress_lock: threading.Lock,
+    program_name: str,
 ) -> dict[str, Any]:
     job = scheduled.payload
     started_dt = utc_now()
@@ -191,7 +198,8 @@ def _execute_job(
         if not config.quiet:
             with progress_lock:
                 print(
-                    f"parxtract: {status} {duration_ms / 1000:.2f}s {job['path']}", file=sys.stderr
+                    f"{program_name}: {status} {duration_ms / 1000:.2f}s {job['path']}",
+                    file=sys.stderr,
                 )
         return result
 
@@ -262,13 +270,17 @@ def _execute_job(
 
 
 def execute_manifest(
-    jobs: list[dict[str, Any]], config: Config, sevenzip: SevenZip
+    jobs: list[dict[str, Any]],
+    config: Config,
+    sevenzip: SevenZip,
+    *,
+    program_name: str = "arcshuttle",
 ) -> tuple[list[dict[str, Any]], dict[str, Any], int]:
     """Execute validated jobs and return result records, summary, and exit code."""
 
     run_id = utc_now().strftime("%Y%m%dT%H%M%SZ") + "-" + uuid.uuid4().hex[:8]
     run_started = time.monotonic()
-    log_base = config.log_dir or (Path.cwd() / ".parxtract" / "logs")
+    log_base = config.log_dir or (Path.cwd() / ".arcshuttle" / "logs")
     log_root = log_base / run_id
     progress_lock = threading.Lock()
     max_processes = config.max_processes
@@ -324,6 +336,7 @@ def execute_manifest(
             run_id=run_id,
             log_root=log_root,
             progress_lock=progress_lock,
+            program_name=program_name,
         )
 
     report = scheduler.run(
@@ -389,7 +402,9 @@ def execute_manifest(
     return results, summary, result_exit_code(results)
 
 
-def _run_command(args: argparse.Namespace, config: Config, sevenzip: SevenZip) -> int:
+def _run_command(
+    args: argparse.Namespace, config: Config, sevenzip: SevenZip, program_name: str
+) -> int:
     stream, should_close = _open_manifest(args.manifest)
     try:
         records = read_json_lines(stream, args.manifest)
@@ -397,33 +412,35 @@ def _run_command(args: argparse.Namespace, config: Config, sevenzip: SevenZip) -
         if should_close:
             stream.close()
     jobs = validate_manifest(records, config)
-    results, summary, exit_code = execute_manifest(jobs, config, sevenzip)
+    results, summary, exit_code = execute_manifest(
+        jobs, config, sevenzip, program_name=program_name
+    )
     for record in results:
         emit_jsonl(record)
     emit_jsonl(summary)
     return exit_code
 
 
-def _report_plan_diagnostics(result: PlanningResult) -> None:
+def _report_plan_diagnostics(result: PlanningResult, program_name: str) -> None:
     for warning in result.warnings:
-        print(f"parxtract: warning: {warning}", file=sys.stderr)
+        print(f"{program_name}: warning: {warning}", file=sys.stderr)
     for error in result.errors:
-        print(f"parxtract: input error: {error}", file=sys.stderr)
+        print(f"{program_name}: input error: {error}", file=sys.stderr)
 
 
-def main(argv: Sequence[str] | None = None) -> int:
+def main(argv: Sequence[str] | None = None, *, program_name: str = "arcshuttle") -> int:
     """Run the CLI and return the documented process exit code."""
 
     try:
-        args = build_parser().parse_args(argv)
+        args = build_parser(program_name=program_name).parse_args(argv)
         config = _config_from_args(args)
         sevenzip = SevenZip(find_executable(config.sevenzip))
-        _show_sevenzip(sevenzip, config.quiet)
+        _show_sevenzip(sevenzip, config.quiet, program_name)
         if args.command == "run":
-            return _run_command(args, config, sevenzip)
+            return _run_command(args, config, sevenzip, program_name)
 
         planning, usable = _plan(args, config, sevenzip)
-        _report_plan_diagnostics(planning)
+        _report_plan_diagnostics(planning, program_name)
         if not usable:
             return 64
         if args.command == "plan":
@@ -434,7 +451,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         jobs = validate_manifest(planning.jobs, config) if planning.jobs else []
         if not jobs:
             return 1 if planning.errors else 64
-        results, summary, exit_code = execute_manifest(jobs, config, sevenzip)
+        results, summary, exit_code = execute_manifest(
+            jobs, config, sevenzip, program_name=program_name
+        )
         for record in results:
             emit_jsonl(record)
         emit_jsonl(summary)
@@ -442,8 +461,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 1
         return exit_code
     except UsageError as exc:
-        print(f"parxtract: error: {exc}", file=sys.stderr)
+        print(f"{program_name}: error: {exc}", file=sys.stderr)
         return 64
     except KeyboardInterrupt:
-        print("parxtract: interrupted", file=sys.stderr)
+        print(f"{program_name}: interrupted", file=sys.stderr)
         return 130

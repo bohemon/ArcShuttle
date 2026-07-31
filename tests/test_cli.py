@@ -6,11 +6,11 @@ from pathlib import Path
 
 import pytest
 
-from parxtract import cli
-from parxtract.config import Config
-from parxtract.manifest import make_plan
-from parxtract.multipart import MultipartInfo
-from parxtract.sevenzip import ProcessOutcome
+from arcshuttle import cli, compat
+from arcshuttle.config import Config
+from arcshuttle.manifest import make_plan
+from arcshuttle.multipart import MultipartInfo
+from arcshuttle.sevenzip import ProcessOutcome
 
 
 class PlanningSevenZip:
@@ -55,7 +55,7 @@ def test_plan_outputs_only_json_lines_to_stdout(
     archive.write_bytes(b"zip")
     patch_sevenzip(monkeypatch, PlanningSevenZip())
 
-    code = cli.main(["plan", "--small-threshold", "1M", str(archive)])
+    code = compat.parxtract_main(["plan", "--small-threshold", "1M", str(archive)])
     captured = capsys.readouterr()
 
     assert code == 0
@@ -69,7 +69,7 @@ def test_no_implicit_stdin(
 ) -> None:
     patch_sevenzip(monkeypatch, PlanningSevenZip())
 
-    code = cli.main(["plan"])
+    code = compat.parxtract_main(["plan"])
     captured = capsys.readouterr()
 
     assert code == 64
@@ -83,7 +83,7 @@ def test_explicit_empty_input_is_an_error(
     paths.write_text("", encoding="utf-8")
     patch_sevenzip(monkeypatch, PlanningSevenZip())
 
-    code = cli.main(["plan", "--files-from", str(paths)])
+    code = compat.parxtract_main(["plan", "--files-from", str(paths)])
     captured = capsys.readouterr()
 
     assert code == 64
@@ -97,7 +97,7 @@ def test_input_failure_emits_no_partial_plan(
     archive.write_bytes(b"zip")
     patch_sevenzip(monkeypatch, PlanningSevenZip())
 
-    code = cli.main(["plan", str(archive), str(tmp_path / "missing.zip")])
+    code = compat.parxtract_main(["plan", str(archive), str(tmp_path / "missing.zip")])
     captured = capsys.readouterr()
 
     assert code == 64
@@ -112,7 +112,7 @@ def test_skip_input_errors_outputs_valid_jobs_and_returns_one(
     archive.write_bytes(b"zip")
     patch_sevenzip(monkeypatch, PlanningSevenZip())
 
-    code = cli.main(
+    code = compat.parxtract_main(
         [
             "plan",
             "--on-input-error",
@@ -132,7 +132,7 @@ def test_files_from_is_exclusive_with_paths(
 ) -> None:
     patch_sevenzip(monkeypatch, PlanningSevenZip())
 
-    code = cli.main(["plan", "--files-from", "-", "a.zip"])
+    code = compat.parxtract_main(["plan", "--files-from", "-", "a.zip"])
     capsys.readouterr()
 
     assert code == 64
@@ -145,7 +145,7 @@ def test_malformed_manifest_is_cli_error(
     manifest.write_text("not json\n", encoding="utf-8")
     patch_sevenzip(monkeypatch, PlanningSevenZip())
 
-    code = cli.main(["run", "--manifest", str(manifest)])
+    code = compat.parxtract_main(["run", "--manifest", str(manifest)])
     capsys.readouterr()
 
     assert code == 64
@@ -163,7 +163,7 @@ def test_plan_filter_run_contract_emits_result_then_summary(
     manifest.write_text(json.dumps(planning.jobs[0]) + "\n", encoding="utf-8")
     patch_sevenzip(monkeypatch, FullSevenZip())
 
-    code = cli.main(
+    code = compat.parxtract_main(
         ["run", "--quiet", "--manifest", str(manifest), "--log-dir", str(tmp_path / "logs")]
     )
     captured = capsys.readouterr()
@@ -181,7 +181,7 @@ def test_extract_convenience_command(
     archive.write_bytes(b"zip")
     patch_sevenzip(monkeypatch, FullSevenZip())
 
-    code = cli.main(
+    code = compat.parxtract_main(
         [
             "extract",
             "--quiet",
