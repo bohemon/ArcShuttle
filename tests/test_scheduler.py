@@ -3,7 +3,7 @@ from __future__ import annotations
 import threading
 import time
 
-from parxtract.scheduler import ResourceScheduler, ScheduledJob
+from arcshuttle.scheduler import ResourceScheduler, ScheduledJob
 
 
 def job(

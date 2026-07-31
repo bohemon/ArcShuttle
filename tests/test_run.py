@@ -6,11 +6,11 @@ from pathlib import Path
 
 import pytest
 
-from parxtract.cli import execute_manifest
-from parxtract.config import Config
-from parxtract.manifest import calculate_integrity, make_plan, validate_manifest
-from parxtract.multipart import MultipartInfo
-from parxtract.sevenzip import ProcessOutcome
+from arcshuttle.cli import execute_manifest
+from arcshuttle.config import Config
+from arcshuttle.manifest import calculate_integrity, make_plan, validate_manifest
+from arcshuttle.multipart import MultipartInfo
+from arcshuttle.sevenzip import ProcessOutcome
 
 
 class StubSevenZip:

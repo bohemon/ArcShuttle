@@ -14,11 +14,11 @@ from typing import Any, TextIO
 _SIZE_RE = re.compile(r"^\s*(\d+)\s*([kmgtpe]?)(?:i?b)?\s*$", re.IGNORECASE)
 
 
-class ParxtractError(Exception):
+class ArcShuttleError(Exception):
     """Base class for expected, user-facing failures."""
 
 
-class UsageError(ParxtractError):
+class UsageError(ArcShuttleError):
     """An invalid CLI, configuration, input, or manifest was supplied."""
 
 

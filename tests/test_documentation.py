@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from parxtract import config
-from parxtract.cli import build_parser
+from arcshuttle import config
+from arcshuttle.cli import build_parser
 
 ROOT = Path(__file__).parents[1]
 MANUALS = (
@@ -19,7 +19,7 @@ MANUALS = (
 @pytest.mark.parametrize("manual", MANUALS, ids=("en", "ja"))
 def test_command_manual_covers_every_cli_command_and_option(manual: Path) -> None:
     text = manual.read_text(encoding="utf-8")
-    parser = build_parser()
+    parser = build_parser(program_name="parxtract")
     subparsers = next(
         action for action in parser._actions if isinstance(action, argparse._SubParsersAction)
     )
@@ -44,7 +44,7 @@ def test_command_manual_covers_every_cli_command_and_option(manual: Path) -> Non
 def test_command_manual_covers_every_environment_variable(manual: Path) -> None:
     text = manual.read_text(encoding="utf-8")
 
-    for variable in config._ENV_NAMES.values():
+    for variable in config._LEGACY_ENV_NAMES.values():
         assert f"`{variable}`" in text
 
 

@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from parxtract.output import (
+from arcshuttle.output import (
     create_staging,
     default_output_path,
     finalize,
@@ -38,7 +38,7 @@ def test_successful_finalization_removes_marker(tmp_path: Path) -> None:
     finalize(staging, final)
 
     assert (final / "file.txt").is_file()
-    assert not (final / ".parxtract-owned").exists()
+    assert not (final / ".arcshuttle-owned").exists()
 
 
 def test_failed_staging_is_retained(tmp_path: Path) -> None:
@@ -49,3 +49,15 @@ def test_failed_staging_is_retained(tmp_path: Path) -> None:
 
     assert retained.is_dir()
     assert retained.name.endswith(".failed")
+
+
+def test_legacy_staging_is_never_claimed_or_renamed(tmp_path: Path) -> None:
+    staging = tmp_path / ".parxtract-existing.failed"
+    staging.mkdir()
+    (staging / ".parxtract-owned").write_text("legacy\n", encoding="utf-8")
+
+    with pytest.raises(OSError, match="unowned"):
+        retain_failed(staging)
+
+    assert staging.is_dir()
+    assert (staging / ".parxtract-owned").is_file()

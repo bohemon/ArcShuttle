@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from parxtract.multipart import archive_stem, canonicalize, identify
+from arcshuttle.multipart import archive_stem, canonicalize, identify
 
 
 @pytest.mark.parametrize(

@@ -47,11 +47,11 @@ def create_staging(final: Path, job_id: str) -> Path:
 
     final.parent.mkdir(parents=True, exist_ok=True)
     for _ in range(10):
-        name = f".parxtract-{job_id[:12]}-{uuid.uuid4().hex[:8]}.tmp"
+        name = f".arcshuttle-{job_id[:12]}-{uuid.uuid4().hex[:8]}.tmp"
         staging = final.parent / name
         try:
             staging.mkdir(mode=0o700)
-            marker = staging / ".parxtract-owned"
+            marker = staging / ".arcshuttle-owned"
             marker.write_text(job_id + "\n", encoding="utf-8")
             return staging
         except FileExistsError:
@@ -62,7 +62,7 @@ def create_staging(final: Path, job_id: str) -> Path:
 def finalize(staging: Path, final: Path) -> None:
     """Atomically rename a tool-owned staging directory to its final path."""
 
-    marker = staging / ".parxtract-owned"
+    marker = staging / ".arcshuttle-owned"
     if not marker.is_file():
         raise OSError(f"refusing to finalize unowned staging directory: {staging}")
     if final.exists():
@@ -77,7 +77,7 @@ def retain_failed(staging: Path) -> Path:
 
     if not staging.exists():
         return staging
-    if not (staging / ".parxtract-owned").is_file():
+    if not (staging / ".arcshuttle-owned").is_file():
         raise OSError(f"refusing to rename unowned staging directory: {staging}")
     base_name = staging.name[:-4] if staging.name.endswith(".tmp") else staging.name
     desired = staging.with_name(base_name + ".failed")

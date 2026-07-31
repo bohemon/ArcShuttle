@@ -59,7 +59,7 @@ def find_executable(explicit: str | None) -> Path:
         for candidate in candidates:
             if candidate.is_file():
                 return candidate.resolve(strict=True)
-    raise UsageError("7-Zip not found; use --7z or PARXTRACT_7Z")
+    raise UsageError("7-Zip not found; use --7z or ARCSHUTTLE_7Z")
 
 
 class SevenZip:

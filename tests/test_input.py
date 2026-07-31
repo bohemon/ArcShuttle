@@ -3,7 +3,7 @@ from __future__ import annotations
 import io
 from pathlib import Path
 
-from parxtract.input import normalize_paths, read_line_paths, read_nul_paths
+from arcshuttle.input import normalize_paths, read_line_paths, read_nul_paths
 
 
 def test_newline_input_and_unicode() -> None:

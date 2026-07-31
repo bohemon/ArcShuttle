@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from parxtract.classify import Classification, classify
+from arcshuttle.classify import Classification, classify
 
 
 def classify_archive(size: int, archive: dict[str, object], failed: bool = False) -> Classification:

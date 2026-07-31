@@ -121,7 +121,7 @@ class ResourceScheduler(Generic[T, R]):
                 )
 
         with ThreadPoolExecutor(
-            max_workers=self.max_processes, thread_name_prefix="parxtract"
+            max_workers=self.max_processes, thread_name_prefix="arcshuttle"
         ) as pool:
             while pending or running:
                 try:

@@ -3,13 +3,13 @@ requires = ["hatchling>=1.27"]
 build-backend = "hatchling.build"
 
 [project]
-name = "parxtract"
+name = "arcshuttle"
 dynamic = ["version"]
-description = "Safely extract independent archives in parallel with 7-Zip"
+description = "Resource-aware parallel archive creation and extraction with 7-Zip"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { file = "LICENSE" }
-authors = [{ name = "parxtract contributors" }]
+authors = [{ name = "ArcShuttle contributors" }]
 dependencies = []
 classifiers = [
   "Programming Language :: Python :: 3",
@@ -19,10 +19,11 @@ classifiers = [
 ]
 
 [project.scripts]
-parxtract = "parxtract.cli:main"
+arcshuttle = "arcshuttle.cli:main"
+parxtract = "arcshuttle.compat:parxtract_main"
 
 [tool.hatch.version]
-path = "src/parxtract/__init__.py"
+path = "src/arcshuttle/__init__.py"
 
 [tool.hatch.build.targets.sdist]
 include = [
@@ -35,12 +36,12 @@ include = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/parxtract"]
+packages = ["src/arcshuttle", "src/parxtract"]
 
 [tool.hatch.build.targets.wheel.force-include]
-"powershell/Parxtract.psm1" = "parxtract/powershell/Parxtract.psm1"
-"docs/COMMAND_MANUAL.en.md" = "parxtract/docs/COMMAND_MANUAL.en.md"
-"docs/COMMAND_MANUAL.ja.md" = "parxtract/docs/COMMAND_MANUAL.ja.md"
+"powershell/Parxtract.psm1" = "arcshuttle/powershell/Parxtract.psm1"
+"docs/COMMAND_MANUAL.en.md" = "arcshuttle/docs/COMMAND_MANUAL.en.md"
+"docs/COMMAND_MANUAL.ja.md" = "arcshuttle/docs/COMMAND_MANUAL.ja.md"
 
 [tool.hatch.envs.default]
 dependencies = [

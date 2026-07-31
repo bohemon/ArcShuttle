@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from parxtract.inspect import parse_technical_listing
+from arcshuttle.inspect import parse_technical_listing
 
 
 def test_technical_listing() -> None:
