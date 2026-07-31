@@ -6,6 +6,7 @@ build-backend = "hatchling.build"
 name = "parxtract"
 dynamic = ["version"]
 description = "Safely extract independent archives in parallel with 7-Zip"
+readme = "README.md"
 requires-python = ">=3.11"
 license = { file = "LICENSE" }
 authors = [{ name = "parxtract contributors" }]
@@ -28,6 +29,7 @@ include = [
   "/src",
   "/powershell",
   "/tests",
+  "/README.md",
   "/LICENSE",
 ]
 
