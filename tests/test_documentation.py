@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import re
 from pathlib import Path
 
 import pytest
@@ -54,3 +55,21 @@ def test_readme_links_to_packaged_manuals() -> None:
         relative_path = manual.relative_to(ROOT).as_posix()
         assert relative_path in readme
         assert manual.is_file()
+
+
+@pytest.mark.parametrize("manual", MANUALS, ids=("en", "ja"))
+def test_command_manual_table_rows_have_consistent_column_counts(manual: Path) -> None:
+    expected_pipes: int | None = None
+
+    for line_number, line in enumerate(manual.read_text(encoding="utf-8").splitlines(), start=1):
+        if not line.startswith("|"):
+            expected_pipes = None
+            continue
+
+        pipe_count = len(re.findall(r"(?<!\\)\|", line))
+        if expected_pipes is None:
+            expected_pipes = pipe_count
+        assert pipe_count == expected_pipes, (
+            f"{manual.name}:{line_number}: table row has {pipe_count - 1} columns; "
+            f"expected {expected_pipes - 1}. Escape literal pipes as \\|."
+        )
