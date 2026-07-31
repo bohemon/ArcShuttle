@@ -159,7 +159,7 @@ parxtract extract --output-dir /data/out --existing rename a.7z b.zip
 | `--7z PATH` | パスまたはコマンド名 | 自動探索 | P/R | 使用する7-Zip CLI。検査と展開に使う |
 | `--output-dir DIR` | ディレクトリ | 各アーカイブの親 | P | 計画される最終出力ルート。`run`ではマニフェストの`output_dir`が優先され、この指定は使われない |
 | `--existing {fail,skip,rename}` | 列挙値 | `fail` | R | 最終出力がすでに存在する場合の非破壊ポリシー |
-| `--cpu-budget N|auto` | 1以上または`auto` | `max(1, CPU数-1)` | P/R | 分類時の重ジョブ割当てと実行時のCPUトークン総量 |
+| `--cpu-budget N\|auto` | 1以上または`auto` | `max(1, CPU数-1)` | P/R | 分類時の重ジョブ割当てと実行時のCPUトークン総量 |
 | `--max-processes N` | 1以上の整数 | `min(4,cpu_budget)` | R | 同時7-Zipプロセス数。`auto` I/Oスロットの派生値にもなる |
 | `--storage-profile {auto,hdd,ssd,nvme}` | 列挙値 | `auto` | R | `--io-slots`未指定時のI/Oスロット既定を選ぶ |
 | `--io-slots N` | 1以上の整数 | プロファイル依存 | R | 全ジョブで共有するI/Oトークン総量 |

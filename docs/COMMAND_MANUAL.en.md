@@ -121,7 +121,7 @@ All subcommands accept these options syntactically. `P` means planning and `R` m
 | `--7z PATH` | Path or command | auto-discovery | P/R | 7-Zip CLI for inspection and extraction |
 | `--output-dir DIR` | Directory | archive parent | P | Planned final-output root; `run` uses manifest `output_dir` instead |
 | `--existing {fail,skip,rename}` | Enum | `fail` | R | Non-destructive policy for existing final output |
-| `--cpu-budget N|auto` | Positive integer or `auto` | `max(1, CPU count-1)` | P/R | Shared CPU-token total and heavy-job planning limit |
+| `--cpu-budget N\|auto` | Positive integer or `auto` | `max(1, CPU count-1)` | P/R | Shared CPU-token total and heavy-job planning limit |
 | `--max-processes N` | Positive integer | `min(4,cpu_budget)` | R | Maximum simultaneous 7-Zip processes |
 | `--storage-profile {auto,hdd,ssd,nvme}` | Enum | `auto` | R | Select default I/O slots |
 | `--io-slots N` | Positive integer | profile-dependent | R | Shared I/O-token total |
