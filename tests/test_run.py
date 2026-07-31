@@ -6,10 +6,11 @@ from pathlib import Path
 
 import pytest
 
-from arcshuttle.cli import execute_manifest
 from arcshuttle.config import Config
-from arcshuttle.manifest import calculate_integrity, make_plan, validate_manifest
+from arcshuttle.manifest import calculate_integrity, validate_manifest
 from arcshuttle.multipart import MultipartInfo
+from arcshuttle.operations.extract import make_extract_plan
+from arcshuttle.runner import execute_manifest
 from arcshuttle.sevenzip import ProcessOutcome
 
 
@@ -56,7 +57,7 @@ def base_config(root: Path, **changes: object) -> Config:
 def create_job(root: Path, config: Config) -> tuple[Path, dict[str, object]]:
     archive = root / "archive.zip"
     archive.write_bytes(b"archive")
-    result = make_plan(
+    result = make_extract_plan(
         [MultipartInfo(archive, False)],
         config,
         lambda path, timeout: (_ for _ in ()).throw(AssertionError("unexpected inspection")),
@@ -150,7 +151,9 @@ def test_fail_fast_marks_unstarted_jobs_skipped(tmp_path: Path) -> None:
     second_archive = tmp_path / "second.zip"
     second_archive.write_bytes(b"second")
     second = validate_manifest(
-        make_plan([MultipartInfo(second_archive, False)], config, lambda path, timeout: None).jobs,
+        make_extract_plan(
+            [MultipartInfo(second_archive, False)], config, lambda path, timeout: None
+        ).jobs,
         config,
     )[0]
 

@@ -1,35 +1,17 @@
-"""Safe staging, destination selection, and atomic finalization."""
+"""Shared non-destructive output selection and owned staging operations."""
 
 from __future__ import annotations
 
 import os
 import uuid
 from contextlib import suppress
-from dataclasses import dataclass
 from pathlib import Path
 
-from .multipart import archive_stem
 from .util import UsageError, unique_path
 
 
-@dataclass(frozen=True, slots=True)
-class OutputPaths:
-    """Final and staging paths allocated for one job."""
-
-    final: Path
-    staging: Path | None
-    skipped: bool = False
-
-
-def default_output_path(archive: Path, root: Path | None) -> Path:
-    """Build the independent output directory for an archive."""
-
-    parent = archive.parent if root is None else root
-    return (parent / archive_stem(archive)).resolve(strict=False)
-
-
-def resolve_existing(desired: Path, policy: str) -> tuple[Path, bool]:
-    """Apply the non-destructive existing-output policy."""
+def resolve_existing(desired: Path, policy: str, *, suffix: str = "") -> tuple[Path, bool]:
+    """Apply a non-destructive policy and optionally preserve a file suffix."""
 
     if not desired.exists():
         return desired, False
@@ -38,16 +20,18 @@ def resolve_existing(desired: Path, policy: str) -> tuple[Path, bool]:
     if policy == "skip":
         return desired, True
     if policy == "rename":
+        if suffix and desired.name.endswith(suffix):
+            return unique_path(desired.with_name(desired.name[: -len(suffix)]), suffix), False
         return unique_path(desired), False
     raise UsageError(f"unsupported existing-output policy: {policy}")
 
 
-def create_staging(final: Path, job_id: str) -> Path:
-    """Create a private staging directory beside the final destination."""
+def create_staging(final: Path, job_id: str, *, prefix: str = ".arcshuttle-") -> Path:
+    """Create a private owned staging directory beside the final destination."""
 
     final.parent.mkdir(parents=True, exist_ok=True)
     for _ in range(10):
-        name = f".arcshuttle-{job_id[:12]}-{uuid.uuid4().hex[:8]}.tmp"
+        name = f"{prefix}{job_id[:12]}-{uuid.uuid4().hex[:8]}.tmp"
         staging = final.parent / name
         try:
             staging.mkdir(mode=0o700)
@@ -59,8 +43,8 @@ def create_staging(final: Path, job_id: str) -> Path:
     raise OSError(f"unable to allocate staging directory beside {final}")
 
 
-def finalize(staging: Path, final: Path) -> None:
-    """Atomically rename a tool-owned staging directory to its final path."""
+def finalize_directory(staging: Path, final: Path) -> None:
+    """Atomically rename an owned staging directory to a final directory."""
 
     marker = staging / ".arcshuttle-owned"
     if not marker.is_file():
@@ -73,7 +57,7 @@ def finalize(staging: Path, final: Path) -> None:
 
 
 def retain_failed(staging: Path) -> Path:
-    """Rename a tool-owned staging directory so partial output remains recoverable."""
+    """Rename an owned staging directory so partial output remains recoverable."""
 
     if not staging.exists():
         return staging

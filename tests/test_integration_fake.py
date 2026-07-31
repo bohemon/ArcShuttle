@@ -7,10 +7,11 @@ from pathlib import Path
 
 import pytest
 
-from arcshuttle.cli import execute_manifest
 from arcshuttle.config import Config
-from arcshuttle.manifest import make_plan, validate_manifest
+from arcshuttle.manifest import validate_manifest
 from arcshuttle.multipart import MultipartInfo
+from arcshuttle.operations.extract import make_extract_plan
+from arcshuttle.runner import execute_manifest
 from arcshuttle.sevenzip import SevenZip
 
 
@@ -47,7 +48,7 @@ def test_inspect_extract_logs_threads_and_unicode_paths(
         quiet=True,
     )
 
-    planning = make_plan([MultipartInfo(archive, False)], config, runner.inspect)
+    planning = make_extract_plan([MultipartInfo(archive, False)], config, runner.inspect)
     assert planning.jobs[0]["scheduling"]["profile"] == "heavy-scalable"
     jobs = validate_manifest(planning.jobs, config)
     results, _, code = execute_manifest(jobs, config, runner)

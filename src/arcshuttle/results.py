@@ -7,6 +7,47 @@ from collections.abc import Iterable
 from typing import Any
 
 
+def job_result(
+    *,
+    job: dict[str, Any],
+    run_id: str,
+    status: str,
+    started_at: str,
+    finished_at: str,
+    duration_ms: int,
+    exit_code: int | None,
+    output_path: str,
+    staging_path: str | None,
+    log_path: str | None,
+    warnings: list[str],
+) -> dict[str, Any]:
+    """Build a schema-compatible result record for one normalized job."""
+
+    schedule = job["scheduling"]
+    schema_version = job.get("_input_schema_version", 2)
+    result = {
+        "schema_version": schema_version,
+        "record_type": "result",
+        "run_id": run_id,
+        "job_id": job["job_id"],
+        "path": job["source"]["path"],
+        "status": status,
+        "exit_code": exit_code,
+        "started_at": started_at,
+        "finished_at": finished_at,
+        "duration_ms": duration_ms,
+        "assigned_cpu_tokens": schedule["cpu_tokens"],
+        "assigned_threads": schedule["threads"],
+        "output_dir": output_path,
+        "staging_dir": staging_path,
+        "log_path": log_path,
+        "warnings": warnings,
+    }
+    if schema_version == 2:
+        result["operation"] = job["operation"]
+    return result
+
+
 def summary_record(
     run_id: str,
     results: Iterable[dict[str, Any]],

@@ -5,16 +5,10 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-from collections.abc import Callable, Iterable
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from .classify import classify
 from .config import Config
-from .multipart import MultipartInfo, inferred_format
-from .output import default_output_path
-from .sevenzip import InspectionResult
 from .util import UsageError, ensure_int, path_key
 
 LEGACY_SCHEMA_VERSION = 1
@@ -32,15 +26,6 @@ _ORIGINAL_PROFILES = {
     "create-7z-lzma2": "heavy-scalable",
     "create-zip-deflate": "heavy-scalable",
 }
-
-
-@dataclass(slots=True)
-class PlanningResult:
-    """Complete plan output and all input-level diagnostics."""
-
-    jobs: list[dict[str, Any]]
-    errors: list[str]
-    warnings: list[str]
 
 
 def legacy_job_id(path: Path, size: int, mtime_ns: int) -> str:
@@ -114,99 +99,6 @@ def calculate_integrity(job: dict[str, Any]) -> str:
         payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")
     ).encode("utf-8")
     return "sha256:" + hashlib.sha256(serialized).hexdigest()
-
-
-def _archive_defaults(info: MultipartInfo, size: int) -> dict[str, Any]:
-    return {
-        "format": inferred_format(info.first_volume),
-        "methods": [],
-        "packed_size": size,
-        "unpacked_size": None,
-        "entries": None,
-        "solid": None,
-        "blocks": None,
-        "encrypted": None,
-        "multipart": info.multipart,
-    }
-
-
-def make_plan(
-    inputs: Iterable[MultipartInfo],
-    config: Config,
-    inspector: Callable[[Path, float], InspectionResult],
-) -> PlanningResult:
-    """Create the unchanged manifest-v1 extraction plan used by the compatibility CLI."""
-
-    jobs: list[dict[str, Any]] = []
-    errors: list[str] = []
-    warnings: list[str] = []
-    for plan_index, info in enumerate(inputs):
-        path = info.first_volume
-        try:
-            stat = path.stat()
-        except OSError as exc:
-            errors.append(f"{path}: cannot stat source: {exc}")
-            continue
-        archive = _archive_defaults(info, stat.st_size)
-        should_inspect = stat.st_size >= config.inspect_threshold or archive["format"] is None
-        inspection_failed = False
-        job_warnings: list[str] = []
-        if should_inspect:
-            outcome = inspector(path, config.inspect_timeout)
-            details = outcome.inspection.as_dict()
-            for key, value in details.items():
-                if value is not None and value != []:
-                    archive[key] = value
-            archive["packed_size"] = archive["packed_size"] or stat.st_size
-            archive["multipart"] = bool(archive["multipart"] or info.multipart)
-            if outcome.error:
-                inspection_failed = True
-                job_warnings.append(outcome.error)
-                warnings.append(f"{path}: {outcome.error}")
-
-        classification = classify(
-            packed_size=stat.st_size,
-            small_threshold=config.small_threshold,
-            archive=archive,
-            cpu_budget=config.cpu_budget,
-            heavy_threads=config.heavy_threads,
-            inspection_failed=inspection_failed,
-        )
-        output = default_output_path(path, config.output_dir)
-        estimated = archive["unpacked_size"] or archive["packed_size"] or stat.st_size
-        job: dict[str, Any] = {
-            "schema_version": LEGACY_SCHEMA_VERSION,
-            "record_type": "job",
-            "job_id": legacy_job_id(path, stat.st_size, stat.st_mtime_ns),
-            "plan_index": plan_index,
-            "path": str(path),
-            "output_dir": str(output),
-            "source": {"size": stat.st_size, "mtime_ns": stat.st_mtime_ns},
-            "archive": archive,
-            "scheduling": {
-                "profile": classification.profile,
-                "profile_source": "auto",
-                "classification_reason": classification.reason,
-                "priority": 0,
-                "estimated_weight": int(estimated),
-                "cpu_tokens": classification.cpu_tokens,
-                "threads": classification.threads,
-                "io_tokens": classification.io_tokens,
-            },
-            "tags": [],
-            "warnings": job_warnings,
-        }
-        job["integrity"] = calculate_integrity(job)
-        jobs.append(job)
-
-    collisions: dict[str, list[dict[str, Any]]] = {}
-    for job in jobs:
-        collisions.setdefault(path_key(Path(job["output_dir"])), []).append(job)
-    for group in collisions.values():
-        if len(group) > 1:
-            paths = ", ".join(job["path"] for job in group)
-            errors.append(f"output collision at {group[0]['output_dir']}: {paths}")
-    return PlanningResult(jobs, errors, warnings)
 
 
 def _require_mapping(value: Any, name: str) -> dict[str, Any]:

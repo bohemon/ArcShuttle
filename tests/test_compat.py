@@ -27,11 +27,18 @@ def test_python_module_entry_points(module: str, expected: str) -> None:
 
 
 def test_legacy_parser_keeps_extraction_commands() -> None:
-    parser = build_parser(program_name="parxtract")
+    parser = build_parser(program_name="parxtract", legacy=True)
     help_text = parser.format_help()
 
     assert parser.prog == "parxtract"
     assert "{plan,run,extract}" in help_text
+
+
+def test_primary_parser_requires_a_plan_operation() -> None:
+    args = build_parser().parse_args(["plan", "extract", "archive.zip"])
+
+    assert args.command == "plan"
+    assert args.plan_operation == "extract"
 
 
 def test_legacy_package_contains_no_implementation_modules() -> None:
