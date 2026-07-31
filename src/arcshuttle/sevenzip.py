@@ -28,7 +28,7 @@ class InspectionResult:
 
 @dataclass(frozen=True, slots=True)
 class ProcessOutcome:
-    """The result of one 7-Zip extraction process."""
+    """The result of one managed 7-Zip process."""
 
     exit_code: int | None
     interrupted: bool
@@ -214,6 +214,171 @@ class SevenZip:
         )
         metadata_path.write_text(
             json.dumps(metadata, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+        )
+        return outcome
+
+    def _run_logged(
+        self,
+        command: list[str],
+        *,
+        cwd: Path,
+        stdout_path: Path,
+        stderr_path: Path,
+        stop_event: threading.Event,
+    ) -> ProcessOutcome:
+        """Run one interruptible command with closed stdin and dedicated logs."""
+
+        if stop_event.is_set():
+            stdout_path.touch()
+            stderr_path.touch()
+            return ProcessOutcome(None, True, "cancelled before process start")
+        creationflags = subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0
+        try:
+            with stdout_path.open("wb") as stdout_log, stderr_path.open("wb") as stderr_log:
+                process = subprocess.Popen(
+                    command,
+                    cwd=cwd,
+                    stdin=subprocess.DEVNULL,
+                    stdout=stdout_log,
+                    stderr=stderr_log,
+                    shell=False,
+                    start_new_session=(os.name != "nt"),
+                    creationflags=creationflags,
+                )
+                with self._lock:
+                    self._active.add(process)
+                try:
+                    exit_code = process.wait()
+                finally:
+                    with self._lock:
+                        self._active.discard(process)
+        except OSError as exc:
+            return ProcessOutcome(None, False, f"7-Zip could not start: {exc}")
+        return ProcessOutcome(exit_code, stop_event.is_set())
+
+    @staticmethod
+    def _update_metadata(log_directory: Path, values: dict[str, object]) -> None:
+        metadata_path = log_directory / "metadata.json"
+        try:
+            metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            metadata = {}
+        metadata.update(values)
+        metadata_path.write_text(
+            json.dumps(metadata, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+        )
+
+    def create(
+        self,
+        *,
+        source: Path,
+        source_kind: str,
+        archive: Path,
+        archive_format: str,
+        method: str,
+        compression_level: int,
+        threads: int,
+        log_directory: Path,
+        cpu_tokens: int,
+        stop_event: threading.Event,
+    ) -> ProcessOutcome:
+        """Create one staged archive from a controlled working directory."""
+
+        if source_kind == "file":
+            cwd = source.parent
+            source_argument = source.name
+        elif source_kind == "directory":
+            cwd = source
+            source_argument = "."
+        else:
+            return ProcessOutcome(None, False, f"unsupported create source kind: {source_kind}")
+        method_switch = f"-m0={method}" if archive_format == "7z" else f"-mm={method}"
+        arguments = [
+            "a",
+            "-y",
+            "-bd",
+            "-bb1",
+            "-bso1",
+            "-bse1",
+            "-bsp0",
+            f"-t{archive_format}",
+            f"-mx={compression_level}",
+            f"-mmt={threads}",
+            "-p-",
+            "--",
+            str(archive),
+            source_argument,
+        ]
+        if compression_level > 0:
+            arguments.insert(9, method_switch)
+        command = self._command(arguments)
+        log_directory.mkdir(parents=True, exist_ok=True)
+        started = utc_now()
+        self._update_metadata(
+            log_directory,
+            {
+                "source": str(source),
+                "archive": str(archive),
+                "cwd": str(cwd),
+                "cpu_tokens": cpu_tokens,
+                "threads": threads,
+                "create": {"command": command, "started_at": isoformat(started)},
+            },
+        )
+        outcome = self._run_logged(
+            command,
+            cwd=cwd,
+            stdout_path=log_directory / "create.stdout.log",
+            stderr_path=log_directory / "create.stderr.log",
+            stop_event=stop_event,
+        )
+        self._update_metadata(
+            log_directory,
+            {
+                "create": {
+                    "command": command,
+                    "started_at": isoformat(started),
+                    "finished_at": isoformat(utc_now()),
+                    "exit_code": outcome.exit_code,
+                    "interrupted": outcome.interrupted,
+                    "error": outcome.error,
+                }
+            },
+        )
+        return outcome
+
+    def test(
+        self,
+        *,
+        archive: Path,
+        log_directory: Path,
+        stop_event: threading.Event,
+    ) -> ProcessOutcome:
+        """Verify one staged archive before it is committed."""
+
+        arguments = ["t", "-bd", "-bb1", "-bso1", "-bse1", "-bsp0", "-p-", "--", str(archive)]
+        command = self._command(arguments)
+        started = utc_now()
+        outcome = self._run_logged(
+            command,
+            cwd=archive.parent,
+            stdout_path=log_directory / "test.stdout.log",
+            stderr_path=log_directory / "test.stderr.log",
+            stop_event=stop_event,
+        )
+        self._update_metadata(
+            log_directory,
+            {
+                "test": {
+                    "command": command,
+                    "cwd": str(archive.parent),
+                    "started_at": isoformat(started),
+                    "finished_at": isoformat(utc_now()),
+                    "exit_code": outcome.exit_code,
+                    "interrupted": outcome.interrupted,
+                    "error": outcome.error,
+                }
+            },
         )
         return outcome
 

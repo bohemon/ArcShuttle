@@ -43,6 +43,23 @@ class FullSevenZip(PlanningSevenZip):
         pass
 
 
+class FullCreateSevenZip(PlanningSevenZip):
+    def create(self, **kwargs: object) -> ProcessOutcome:
+        archive = kwargs["archive"]
+        log_directory = kwargs["log_directory"]
+        assert isinstance(archive, Path)
+        assert isinstance(log_directory, Path)
+        archive.write_bytes(b"created")
+        log_directory.mkdir(parents=True)
+        return ProcessOutcome(0, False)
+
+    def test(self, **kwargs: object) -> ProcessOutcome:
+        return ProcessOutcome(0, False)
+
+    def interrupt_all(self) -> None:
+        pass
+
+
 def patch_sevenzip(monkeypatch: pytest.MonkeyPatch, instance: PlanningSevenZip) -> None:
     monkeypatch.setattr(cli, "find_executable", lambda configured: Path("fake"))
     monkeypatch.setattr(cli, "SevenZip", lambda executable: instance)
@@ -121,6 +138,32 @@ def test_arcshuttle_plan_create_reads_utf8_nul_input(
 
     assert code == 0
     assert json.loads(captured.out)["source"]["path"] == str(source)
+
+
+def test_arcshuttle_create_plans_and_runs_in_one_invocation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    source = tmp_path / "source.dat"
+    source.write_bytes(b"source")
+    patch_sevenzip(monkeypatch, FullCreateSevenZip())
+
+    code = cli.main(
+        [
+            "create",
+            "--output-dir",
+            str(tmp_path / "out"),
+            "--log-dir",
+            str(tmp_path / "logs"),
+            "--quiet",
+            str(source),
+        ]
+    )
+    records = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
+
+    assert code == 0
+    assert [record["record_type"] for record in records] == ["result", "summary"]
+    assert records[0]["operation"] == "create"
+    assert Path(records[0]["output_dir"]).read_bytes() == b"created"
 
 
 def test_no_implicit_stdin(

@@ -10,11 +10,12 @@ from pathlib import Path
 from typing import Any
 
 from .config import Config
+from .operations.create import execute_job as execute_create_job
 from .operations.extract import execute_job as execute_extract_job
 from .results import job_result, result_exit_code, summary_record
 from .scheduler import ResourceScheduler, ScheduledJob, SchedulerEvent
 from .sevenzip import SevenZip
-from .util import UsageError, isoformat, utc_now
+from .util import isoformat, utc_now
 
 
 def execute_manifest(
@@ -25,9 +26,6 @@ def execute_manifest(
     program_name: str = "arcshuttle",
 ) -> tuple[list[dict[str, Any]], dict[str, Any], int]:
     """Execute validated jobs and return result records, summary, and exit code."""
-
-    if any(job.get("operation") != "extract" for job in jobs):
-        raise UsageError("create execution is not available until the create executor is enabled")
 
     run_id = utc_now().strftime("%Y%m%dT%H%M%SZ") + "-" + uuid.uuid4().hex[:8]
     run_started = time.monotonic()
@@ -79,7 +77,10 @@ def execute_manifest(
     )
 
     def worker(job: ScheduledJob[dict[str, Any]], stop: threading.Event) -> dict[str, Any]:
-        return execute_extract_job(
+        executor = (
+            execute_create_job if job.payload["operation"] == "create" else execute_extract_job
+        )
+        return executor(
             job,
             stop,
             config=config,
