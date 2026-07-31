@@ -29,6 +29,9 @@ jobs:
       - run: hatch run format-check
       - run: hatch run test
       - run: hatch build
+      - name: Verify clean wheel installation
+        if: matrix.python-version == '3.12'
+        run: hatch run verify-release --skip-build
       - name: Import PowerShell module
         if: runner.os == 'Windows'
         shell: pwsh
