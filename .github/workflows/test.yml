@@ -2,7 +2,15 @@ name: test
 
 on:
   push:
+    branches: [main]
   pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: test-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:
@@ -27,3 +35,17 @@ jobs:
         run: |
           Import-Module ./powershell/Parxtract.psm1 -Force
           Get-Command Invoke-ParxtractPlan, Invoke-ParxtractRun, Invoke-Parxtract
+
+  required:
+    name: required
+    if: ${{ always() }}
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify test matrix
+        shell: bash
+        run: |
+          if [[ "${{ needs.test.result }}" != "success" ]]; then
+            echo "The test matrix did not succeed: ${{ needs.test.result }}" >&2
+            exit 1
+          fi
