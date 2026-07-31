@@ -84,6 +84,45 @@ def test_arcshuttle_plan_extract_outputs_schema_v2(
     assert record["destination"]["kind"] == "directory"
 
 
+def test_arcshuttle_plan_create_outputs_schema_v2(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    source = tmp_path / "圧縮 対象"
+    source.mkdir()
+    (source / "data.txt").write_text("content", encoding="utf-8")
+    patch_sevenzip(monkeypatch, PlanningSevenZip())
+
+    code = cli.main(["plan", "create", "--format", "zip", "--level", "7", str(source)])
+    captured = capsys.readouterr()
+    record = json.loads(captured.out)
+
+    assert code == 0
+    assert record["operation"] == "create"
+    assert record["source"]["kind"] == "directory"
+    assert record["destination"]["path"] == str(tmp_path / "圧縮 対象.zip")
+    assert record["archive"] == {
+        "format": "zip",
+        "method": "Deflate",
+        "compression_level": 7,
+    }
+
+
+def test_arcshuttle_plan_create_reads_utf8_nul_input(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    source = tmp_path / "nul 空白.dat"
+    source.write_bytes(b"data")
+    path_file = tmp_path / "paths.bin"
+    path_file.write_bytes(str(source).encode("utf-8") + b"\0")
+    patch_sevenzip(monkeypatch, PlanningSevenZip())
+
+    code = cli.main(["plan", "create", "--files0-from", str(path_file)])
+    captured = capsys.readouterr()
+
+    assert code == 0
+    assert json.loads(captured.out)["source"]["path"] == str(source)
+
+
 def test_no_implicit_stdin(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:

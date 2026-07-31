@@ -12,6 +12,7 @@ from .config import Config, resolve_config
 from .input import collect_paths, normalize_paths
 from .manifest import validate_manifest
 from .multipart import canonicalize
+from .operations.create import make_create_plan, normalize_create_paths
 from .operations.extract import (
     PlanningResult,
     make_extract_plan,
@@ -57,6 +58,11 @@ def _add_input(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--files0-from", metavar="FILE")
 
 
+def _add_create_options(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--format", dest="create_format", choices=("7z", "zip"), default=None)
+    parser.add_argument("--level", dest="compression_level", type=int, default=None, metavar="0..9")
+
+
 def build_parser(
     *, program_name: str = "arcshuttle", legacy: bool = False
 ) -> argparse.ArgumentParser:
@@ -78,6 +84,10 @@ def build_parser(
         plan_extract = plan_operations.add_parser("extract", help="plan archive extraction")
         _add_common(plan_extract)
         _add_input(plan_extract)
+        plan_create = plan_operations.add_parser("create", help="plan archive creation")
+        _add_common(plan_create)
+        _add_create_options(plan_create)
+        _add_input(plan_create)
 
     run = subparsers.add_parser("run", help="execute a complete JSON Lines manifest")
     _add_common(run)
@@ -86,6 +96,11 @@ def build_parser(
     extract = subparsers.add_parser("extract", help="plan and run extraction in one invocation")
     _add_common(extract)
     _add_input(extract)
+    if not legacy:
+        create = subparsers.add_parser("create", help="plan and run archive creation")
+        _add_common(create)
+        _add_create_options(create)
+        _add_input(create)
     return parser
 
 
@@ -142,6 +157,19 @@ def _plan_extract(
     return result, True
 
 
+def _plan_create(args: argparse.Namespace, config: Config) -> tuple[PlanningResult, bool]:
+    raw_paths = collect_paths(args.paths, files_from=args.files_from, files0_from=args.files0_from)
+    if not raw_paths:
+        result = PlanningResult([], ["input contains no paths"], [])
+        return result, config.on_input_error == "skip"
+    normalized, errors = normalize_create_paths(raw_paths)
+    result = make_create_plan(normalized, config)
+    result.errors = [*errors, *result.errors]
+    if result.errors and config.on_input_error == "fail":
+        return result, False
+    return result, True
+
+
 def _run_command(
     args: argparse.Namespace, config: Config, sevenzip: SevenZip, program_name: str
 ) -> int:
@@ -184,7 +212,11 @@ def main(
         if args.command == "run":
             return _run_command(args, config, sevenzip, program_name)
 
-        planning, usable = _plan_extract(args, config, sevenzip, legacy=legacy)
+        operation = "extract" if legacy else getattr(args, "plan_operation", None) or args.command
+        if operation == "create":
+            planning, usable = _plan_create(args, config)
+        else:
+            planning, usable = _plan_extract(args, config, sevenzip, legacy=legacy)
         _report_plan_diagnostics(planning, program_name)
         if not usable:
             return 64

@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from arcshuttle.config import resolve_config
-from arcshuttle.util import parse_size
+from arcshuttle.util import UsageError, parse_size
 
 
 @pytest.mark.parametrize(
@@ -85,3 +85,37 @@ def test_cpu_budget_updates_dependent_defaults() -> None:
     assert config.max_processes == 1
     assert config.heavy_threads == 1
     assert config.io_slots == 1
+
+
+def test_create_configuration_uses_only_new_names(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(
+        "[arcshuttle]\ncreate_format = 'zip'\ncompression_level = 8\n",
+        encoding="utf-8",
+    )
+
+    config = resolve_config(
+        {"compression_level": 2},
+        config_path=config_path,
+        environ={
+            "PARXTRACT_CREATE_FORMAT": "ignored",
+            "ARCSHUTTLE_CREATE_FORMAT": "7z",
+        },
+    )
+
+    assert config.create_format == "7z"
+    assert config.compression_level == 2
+
+
+@pytest.mark.parametrize("level", [-1, 10, "high"])
+def test_compression_level_range_is_validated(level: object) -> None:
+    with pytest.raises(UsageError, match="compression_level"):
+        resolve_config({"compression_level": level}, environ={})
+
+
+def test_legacy_toml_cannot_set_create_fields(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.toml"
+    config_path.write_text("[parxtract]\ncreate_format = 'zip'\n", encoding="utf-8")
+
+    with pytest.raises(UsageError, match="unknown config option"):
+        resolve_config({}, config_path=config_path, environ={})
