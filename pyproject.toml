@@ -1,0 +1,33 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "parxtract"
+dynamic = ["version"]
+description = "Safely extract independent archives in parallel with 7-Zip"
+requires-python = ">=3.11"
+license = { file = "LICENSE" }
+authors = [{ name = "parxtract contributors" }]
+dependencies = []
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Operating System :: Microsoft :: Windows",
+  "Operating System :: POSIX :: Linux",
+]
+
+[project.scripts]
+parxtract = "parxtract.cli:main"
+
+[tool.hatch.version]
+path = "src/parxtract/__init__.py"
+
+[tool.hatch.build.targets.sdist]
+include = [
+  "/src",
+  "/LICENSE",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/parxtract"]
