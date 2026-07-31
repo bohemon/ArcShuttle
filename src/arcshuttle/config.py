@@ -34,6 +34,8 @@ class Config:
     fail_fast: bool = False
     allow_changed: bool = False
     on_input_error: str = "fail"
+    create_format: str = "7z"
+    compression_level: int = 5
 
 
 _ENV_NAMES = {
@@ -55,10 +57,15 @@ _ENV_NAMES = {
     "fail_fast": "ARCSHUTTLE_FAIL_FAST",
     "allow_changed": "ARCSHUTTLE_ALLOW_CHANGED",
     "on_input_error": "ARCSHUTTLE_ON_INPUT_ERROR",
+    "create_format": "ARCSHUTTLE_CREATE_FORMAT",
+    "compression_level": "ARCSHUTTLE_COMPRESSION_LEVEL",
 }
 
+_CREATE_FIELDS = {"create_format", "compression_level"}
 _LEGACY_ENV_NAMES = {
-    name: env_name.replace("ARCSHUTTLE_", "PARXTRACT_", 1) for name, env_name in _ENV_NAMES.items()
+    name: env_name.replace("ARCSHUTTLE_", "PARXTRACT_", 1)
+    for name, env_name in _ENV_NAMES.items()
+    if name not in _CREATE_FIELDS
 }
 
 _SIZE_FIELDS = {"small_threshold", "inspect_threshold", "sequential_if_total_below"}
@@ -89,6 +96,11 @@ def _coerce(name: str, value: Any) -> Any:
             if result < 1:
                 raise ValueError
             return result
+        if name == "compression_level":
+            result = int(value)
+            if not 0 <= result <= 9:
+                raise ValueError
+            return result
         if name in _FLOAT_FIELDS:
             result = float(value)
             if result < 0:
@@ -103,8 +115,12 @@ def _coerce(name: str, value: Any) -> Any:
         raise UsageError(f"invalid value for {name}: {value!r}") from exc
 
 
-def _validate_toml_values(values: Mapping[str, Any], source: str) -> dict[str, Any]:
+def _validate_toml_values(
+    values: Mapping[str, Any], source: str, *, allow_create: bool = True
+) -> dict[str, Any]:
     known = set(asdict(Config()))
+    if not allow_create:
+        known -= _CREATE_FIELDS
     unknown = set(values) - known
     if unknown:
         raise UsageError(f"unknown config option(s) in {source}: {', '.join(sorted(unknown))}")
@@ -122,6 +138,7 @@ def _read_toml(path: Path | None) -> dict[str, Any]:
     values = _validate_toml_values(
         {name: value for name, value in loaded.items() if name not in {"parxtract", "arcshuttle"}},
         "config root",
+        allow_create=False,
     )
     for section_name in ("parxtract", "arcshuttle"):
         if section_name not in loaded:
@@ -129,7 +146,13 @@ def _read_toml(path: Path | None) -> dict[str, Any]:
         section = loaded[section_name]
         if not isinstance(section, dict):
             raise UsageError(f"config [{section_name}] section must be a table")
-        values.update(_validate_toml_values(section, f"config [{section_name}]"))
+        values.update(
+            _validate_toml_values(
+                section,
+                f"config [{section_name}]",
+                allow_create=section_name == "arcshuttle",
+            )
+        )
     return values
 
 
@@ -157,10 +180,11 @@ def resolve_config(
     values = {name: _coerce(name, value) for name, value in values.items()}
 
     def explicitly_set(name: str) -> bool:
+        legacy_env_name = _LEGACY_ENV_NAMES.get(name)
         return (
             cli_values.get(name) is not None
             or _ENV_NAMES[name] in env
-            or _LEGACY_ENV_NAMES[name] in env
+            or (legacy_env_name is not None and legacy_env_name in env)
             or name in toml_values
         )
 
@@ -175,6 +199,8 @@ def resolve_config(
         raise UsageError("storage_profile must be auto, hdd, ssd, or nvme")
     if values["on_input_error"] not in {"fail", "skip"}:
         raise UsageError("on_input_error must be fail or skip")
+    if values["create_format"] not in {"7z", "zip"}:
+        raise UsageError("create_format must be 7z or zip")
 
     # I/O defaults depend on the resolved process/profile settings unless explicitly set.
     explicit_io = explicitly_set("io_slots")
