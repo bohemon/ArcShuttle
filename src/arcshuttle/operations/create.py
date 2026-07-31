@@ -353,9 +353,9 @@ def execute_job(
             staging_path=str(staging) if staging is not None else None,
             log_path=str(log_path) if log_path.exists() else None,
             warnings=warnings,
+            create_exit_code=create_exit_code,
+            verification_exit_code=test_exit_code,
         )
-        result["create_exit_code"] = create_exit_code
-        result["test_exit_code"] = test_exit_code
         if not config.quiet:
             with progress_lock:
                 print(

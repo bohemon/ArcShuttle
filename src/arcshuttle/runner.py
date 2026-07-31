@@ -75,11 +75,10 @@ def execute_manifest(
         reservation_delay=config.reservation_delay,
         on_event=on_event,
     )
+    executors = {"extract": execute_extract_job, "create": execute_create_job}
 
     def worker(job: ScheduledJob[dict[str, Any]], stop: threading.Event) -> dict[str, Any]:
-        executor = (
-            execute_create_job if job.payload["operation"] == "create" else execute_extract_job
-        )
+        executor = executors[job.payload["operation"]]
         return executor(
             job,
             stop,
@@ -149,6 +148,12 @@ def execute_manifest(
                 warnings=[*job["warnings"], reason],
             )
         )
+
+    if any(job.get("_input_schema_version") != 1 for job in jobs):
+        manifest_order = {
+            job["job_id"]: (job["plan_index"], index) for index, job in enumerate(jobs)
+        }
+        results.sort(key=lambda result: manifest_order[result["job_id"]])
 
     duration_ms = round((time.monotonic() - run_started) * 1000)
     schema_version = 1 if all(job.get("_input_schema_version") == 1 for job in jobs) else 2
