@@ -136,12 +136,13 @@ def _base_result(
     warnings: list[str],
 ) -> dict[str, Any]:
     schedule = job["scheduling"]
-    return {
-        "schema_version": 1,
+    schema_version = job.get("_input_schema_version", 2)
+    result = {
+        "schema_version": schema_version,
         "record_type": "result",
         "run_id": run_id,
         "job_id": job["job_id"],
-        "path": job["path"],
+        "path": job["source"]["path"],
         "status": status,
         "exit_code": exit_code,
         "started_at": started_at,
@@ -154,6 +155,9 @@ def _base_result(
         "log_path": str(log_path) if log_path is not None else None,
         "warnings": warnings,
     }
+    if schema_version == 2:
+        result["operation"] = job["operation"]
+    return result
 
 
 def _execute_job(
@@ -171,7 +175,7 @@ def _execute_job(
     started_dt = utc_now()
     started = isoformat(started_dt)
     start_clock = time.monotonic()
-    desired = Path(job["output_dir"])
+    desired = Path(job["destination"]["path"])
     final = desired
     staging: Path | None = None
     log_path = log_root / job["job_id"]
@@ -198,7 +202,7 @@ def _execute_job(
         if not config.quiet:
             with progress_lock:
                 print(
-                    f"{program_name}: {status} {duration_ms / 1000:.2f}s {job['path']}",
+                    f"{program_name}: {status} {duration_ms / 1000:.2f}s {job['source']['path']}",
                     file=sys.stderr,
                 )
         return result
@@ -208,7 +212,7 @@ def _execute_job(
     if job["archive"].get("encrypted") is True:
         return finish("failed", None, error="encrypted archives are not supported in version 1")
     try:
-        stat = Path(job["path"]).stat()
+        stat = Path(job["source"]["path"]).stat()
     except OSError as exc:
         return finish("failed", None, error=f"cannot stat source before extraction: {exc}")
     source = job["source"]
@@ -229,7 +233,7 @@ def _execute_job(
         return finish("failed", None, error=f"cannot create staging directory: {exc}")
 
     outcome: ProcessOutcome = sevenzip.extract(
-        archive=Path(job["path"]),
+        archive=Path(job["source"]["path"]),
         staging=staging,
         threads=job["scheduling"]["threads"],
         log_directory=log_path,
@@ -277,6 +281,9 @@ def execute_manifest(
     program_name: str = "arcshuttle",
 ) -> tuple[list[dict[str, Any]], dict[str, Any], int]:
     """Execute validated jobs and return result records, summary, and exit code."""
+
+    if any(job.get("operation") != "extract" for job in jobs):
+        raise UsageError("create execution is not available until the create executor is enabled")
 
     run_id = utc_now().strftime("%Y%m%dT%H%M%SZ") + "-" + uuid.uuid4().hex[:8]
     run_started = time.monotonic()
@@ -364,7 +371,7 @@ def execute_manifest(
                 finished_at=now,
                 duration_ms=0,
                 exit_code=None,
-                output_dir=Path(job["output_dir"]),
+                output_dir=Path(job["destination"]["path"]),
                 staging_dir=None,
                 log_path=None,
                 warnings=[*job["warnings"], f"worker failed: {value}"],
@@ -390,7 +397,7 @@ def execute_manifest(
                 finished_at=now,
                 duration_ms=0,
                 exit_code=None,
-                output_dir=Path(job["output_dir"]),
+                output_dir=Path(job["destination"]["path"]),
                 staging_dir=None,
                 log_path=None,
                 warnings=[*job["warnings"], reason],
@@ -398,7 +405,8 @@ def execute_manifest(
         )
 
     duration_ms = round((time.monotonic() - run_started) * 1000)
-    summary = summary_record(run_id, results, duration_ms)
+    schema_version = 1 if all(job.get("_input_schema_version") == 1 for job in jobs) else 2
+    summary = summary_record(run_id, results, duration_ms, schema_version=schema_version)
     return results, summary, result_exit_code(results)
 
 

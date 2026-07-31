@@ -8,7 +8,13 @@ import pytest
 
 from arcshuttle.config import Config
 from arcshuttle.inspect import Inspection
-from arcshuttle.manifest import calculate_integrity, make_plan, validate_manifest
+from arcshuttle.manifest import (
+    calculate_integrity,
+    deterministic_job_id,
+    make_plan,
+    source_identity,
+    validate_manifest,
+)
 from arcshuttle.multipart import MultipartInfo
 from arcshuttle.sevenzip import InspectionResult
 from arcshuttle.util import UsageError
@@ -25,6 +31,61 @@ def plan_one(path: Path, **config_changes: object) -> tuple[dict[str, object], C
     return result.jobs[0], config
 
 
+def v2_job(
+    source_path: Path,
+    destination_path: Path,
+    *,
+    operation: str = "extract",
+    plan_index: int = 0,
+) -> dict[str, object]:
+    kind = "file" if source_path.is_file() else "directory"
+    identity = source_identity(
+        kind=kind,
+        size=source_path.stat().st_size if source_path.is_file() else 0,
+        mtime_ns=source_path.stat().st_mtime_ns,
+        entry_count=1,
+    )
+    reason = "below-small-threshold" if operation == "extract" else "create-7z-lzma2"
+    job: dict[str, object] = {
+        "schema_version": 2,
+        "record_type": "job",
+        "operation": operation,
+        "job_id": deterministic_job_id(operation, source_path, identity),
+        "plan_index": plan_index,
+        "source": {
+            "path": str(source_path),
+            "kind": kind,
+            "size": source_path.stat().st_size if source_path.is_file() else 0,
+            "mtime_ns": source_path.stat().st_mtime_ns,
+            "entry_count": 1,
+            "identity": identity,
+        },
+        "destination": {
+            "path": str(destination_path),
+            "kind": "directory" if operation == "extract" else "archive",
+        },
+        "archive": (
+            {"format": "zip", "encrypted": False}
+            if operation == "extract"
+            else {"format": "7z", "method": "LZMA2", "compression_level": 5}
+        ),
+        "scheduling": {
+            "profile": "small" if operation == "extract" else "heavy-scalable",
+            "profile_source": "auto",
+            "classification_reason": reason,
+            "priority": 0,
+            "estimated_weight": 1,
+            "cpu_tokens": 1,
+            "threads": 1,
+            "io_tokens": 1,
+        },
+        "tags": [],
+        "warnings": [],
+    }
+    job["integrity"] = calculate_integrity(job)
+    return job
+
+
 def test_json_lines_round_trip_and_validation(tmp_path: Path) -> None:
     archive = tmp_path / "日本語.zip"
     archive.write_bytes(b"zip")
@@ -32,7 +93,13 @@ def test_json_lines_round_trip_and_validation(tmp_path: Path) -> None:
 
     round_trip = json.loads(json.dumps(job, ensure_ascii=False))
 
-    assert validate_manifest([round_trip], config)[0]["path"] == str(archive.resolve())
+    normalized = validate_manifest([round_trip], config)[0]
+
+    assert normalized["source"]["path"] == str(archive.resolve())
+    assert normalized["destination"]["path"] == job["output_dir"]
+    assert normalized["operation"] == "extract"
+    assert normalized["_input_schema_version"] == 1
+    assert round_trip["schema_version"] == 1
 
 
 def test_immutable_change_is_rejected(tmp_path: Path) -> None:
@@ -114,3 +181,99 @@ def test_inspection_failure_is_conservative(tmp_path: Path) -> None:
 
     assert result.jobs[0]["scheduling"]["profile"] == "heavy-serial"
     assert result.jobs[0]["scheduling"]["classification_reason"] == "inspection-failed"
+
+
+def test_v2_extract_and_create_jobs_can_share_a_manifest(tmp_path: Path) -> None:
+    archive = tmp_path / "input.zip"
+    archive.write_bytes(b"zip")
+    source_dir = tmp_path / "source"
+    source_dir.mkdir()
+    extract = v2_job(archive.resolve(), (tmp_path / "out").resolve())
+    create = v2_job(
+        source_dir.resolve(),
+        (tmp_path / "source.7z").resolve(),
+        operation="create",
+        plan_index=1,
+    )
+
+    validated = validate_manifest([extract, create], Config(cpu_budget=2, io_slots=2))
+
+    assert [job["operation"] for job in validated] == ["extract", "create"]
+    assert all(job["_input_schema_version"] == 2 for job in validated)
+
+
+def test_v2_edit_allowlist_preserves_integrity(tmp_path: Path) -> None:
+    archive = tmp_path / "input.zip"
+    archive.write_bytes(b"zip")
+    job = v2_job(archive.resolve(), (tmp_path / "out").resolve())
+    original = job["integrity"]
+    job["destination"]["path"] = str((tmp_path / "elsewhere").resolve())  # type: ignore[index]
+    job["scheduling"]["profile"] = "heavy-scalable"  # type: ignore[index]
+    job["scheduling"]["priority"] = 10  # type: ignore[index]
+    job["scheduling"]["cpu_tokens"] = 8  # type: ignore[index]
+    job["scheduling"]["threads"] = 8  # type: ignore[index]
+    job["tags"] = ["urgent"]
+
+    assert calculate_integrity(job) == original
+    validated = validate_manifest([job], Config(cpu_budget=2, io_slots=1))[0]
+    assert validated["destination"]["path"] == str((tmp_path / "elsewhere").resolve())
+    assert validated["scheduling"]["cpu_tokens"] == 2
+    assert validated["scheduling"]["threads"] == 2
+
+
+def test_v2_immutable_change_and_integrity_mismatch_are_rejected(tmp_path: Path) -> None:
+    archive = tmp_path / "input.zip"
+    archive.write_bytes(b"zip")
+    job = v2_job(archive.resolve(), (tmp_path / "out").resolve())
+    job["source"]["size"] = 99  # type: ignore[index]
+
+    with pytest.raises(UsageError, match="immutable"):
+        validate_manifest([job], Config())
+
+
+@pytest.mark.parametrize(
+    ("change", "match"),
+    [
+        (lambda job: job.update(schema_version=99), "unsupported schema_version"),
+        (lambda job: job.update(operation="delete"), "operation"),
+        (lambda job: job.pop("source"), "missing field"),
+    ],
+)
+def test_unsupported_or_incomplete_v2_records_are_rejected(
+    tmp_path: Path, change, match: str
+) -> None:
+    archive = tmp_path / "input.zip"
+    archive.write_bytes(b"zip")
+    job = v2_job(archive.resolve(), (tmp_path / "out").resolve())
+    change(job)
+
+    with pytest.raises(UsageError, match=match):
+        validate_manifest([job], Config())
+
+
+def test_v2_destination_collision_is_rejected_before_execution(tmp_path: Path) -> None:
+    one = tmp_path / "one.zip"
+    two = tmp_path / "two.zip"
+    one.write_bytes(b"1")
+    two.write_bytes(b"2")
+    destination = (tmp_path / "same").resolve()
+
+    with pytest.raises(UsageError, match="output collision"):
+        validate_manifest(
+            [
+                v2_job(one.resolve(), destination, plan_index=0),
+                v2_job(two.resolve(), destination, plan_index=1),
+            ],
+            Config(),
+        )
+
+
+def test_v2_io_budget_is_rejected(tmp_path: Path) -> None:
+    archive = tmp_path / "input.zip"
+    archive.write_bytes(b"zip")
+    job = v2_job(archive.resolve(), (tmp_path / "out").resolve())
+    job["scheduling"]["io_tokens"] = 2  # type: ignore[index]
+    job["integrity"] = calculate_integrity(job)
+
+    with pytest.raises(UsageError, match="I/O slots"):
+        validate_manifest([job], Config(io_slots=1))
