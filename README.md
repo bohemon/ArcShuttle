@@ -154,6 +154,7 @@ hatch run lint
 hatch run format-check
 hatch run check
 hatch build
+hatch run verify-release
 ```
 
 The installed CLI intentionally has no third-party runtime dependencies. Python 3.11 provides TOML, JSON, subprocess, hashing, path, and concurrency facilities needed by the safety contract. Development-only `pytest`, `pytest-timeout`, and Ruff provide test isolation, hang protection, linting, compatibility checks, and deterministic formatting inside Hatch.

@@ -28,6 +28,7 @@ path = "src/arcshuttle/__init__.py"
 [tool.hatch.build.targets.sdist]
 include = [
   "/src",
+  "/scripts",
   "/powershell",
   "/tests",
   "/docs",
@@ -57,6 +58,7 @@ test-verbose = "pytest -vv {args:tests}"
 lint = "ruff check {args:.}"
 format = "ruff check --fix {args:.} && ruff format {args:.}"
 format-check = "ruff format --check {args:.}"
+verify-release = "python scripts/verify_release.py {args}"
 check = [
   "ruff check .",
   "ruff format --check .",
