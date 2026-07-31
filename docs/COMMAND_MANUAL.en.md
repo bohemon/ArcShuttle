@@ -1,172 +1,182 @@
 ---
-title: parxtract Command and Option Manual
+title: ArcShuttle Command and Option Manual
 language: en
-manual_version: 1
-applies_to_cli_version: 0.1.0
-jsonl_schema_version: 1
+manual_version: 2
+applies_to_cli_version: 0.2.0
+jsonl_schema_version: 2
 audience:
   - human
   - ai-agent
 source_of_truth:
-  - src/parxtract/cli.py
-  - src/parxtract/config.py
-  - src/parxtract/manifest.py
+  - src/arcshuttle/cli.py
+  - src/arcshuttle/config.py
+  - src/arcshuttle/manifest.py
+  - src/arcshuttle/operations
+  - powershell/ArcShuttle.psm1
   - powershell/Parxtract.psm1
 ---
 
-# `parxtract` Command and Option Manual
+# ArcShuttle command and option manual
 
-This is the normative reference for humans and AI agents operating `parxtract` 0.1.0 safely and consistently. See `README.md` for an overview; use this manual for the precise command contract. The words **must**, **must not**, and **may only** express normative requirements. A “default” is used when the CLI, an environment variable, and an explicit TOML file do not override it.
+This is the normative human/AI reference for ArcShuttle 0.2.0. “Must,” “must not,” and “may only” describe requirements. Stdout means the process standard-output byte stream; stderr means standard error.
 
-## 1. Minimum contract
+## 1. Minimum safe contract
 
-1. Put the subcommand immediately after the command name and common options after the subcommand.
-2. For `plan` or `extract`, specify exactly one input source: `PATH...`, `--files-from`, or `--files0-from`.
-3. Treat stdout as UTF-8 JSON Lines and read human-facing messages from stderr.
-4. Read all `plan` output through EOF before passing it to `run`.
-5. An external filter may modify only the six fields listed in section 11.3.
-6. Do not start multiple `parxtract run` processes through GNU Parallel or a similar tool.
-7. Do not interpret every nonzero exit as “no output.” Exit 1 can accompany valid JSON Lines.
-8. Source archives and failed staging directories are not deleted by default.
+1. Use `arcshuttle` for new work. Use `parxtract` only for compatibility with the extraction-only 0.1 syntax.
+2. Put the operation after `plan`: use `arcshuttle plan extract`, not `arcshuttle plan` by itself.
+3. Select exactly one path source: positional `PATH...`, `--files-from`, or `--files0-from`.
+4. Treat stdout as UTF-8 JSON Lines only. Diagnostics, the selected 7-Zip version, and progress are on stderr.
+5. Read stdout through EOF even when the exit is 1 or 2. Valid results and a summary can accompany either exit.
+6. Validate a complete manifest before execution. External filters may edit only the allowlisted fields in section 9.
+7. Never delete a source, an existing destination, or a retained `.failed` staging path to make an operation succeed.
+8. Run one `arcshuttle run` for jobs that must share one resource budget; do not wrap several runs in GNU Parallel.
 
 ```sh
-parxtract extract archive1.7z archive2.zip
-parxtract plan archive1.7z archive2.zip > plan.jsonl
-parxtract run --manifest plan.jsonl > result.jsonl
+arcshuttle create folder-a file.dat
+arcshuttle extract one.7z two.zip
+arcshuttle plan create folder-a > create.jsonl
+arcshuttle run --manifest create.jsonl > results.jsonl
 ```
 
-## 2. Command syntax
+## 2. Commands and syntax
 
 ```text
-parxtract [--version] {plan|run|extract} ...
+arcshuttle [--help] [--version] COMMAND ...
 
-parxtract plan    [COMMON_OPTIONS] [PATH ...]
-parxtract plan    [COMMON_OPTIONS] --files-from FILE
-parxtract plan    [COMMON_OPTIONS] --files0-from FILE
-parxtract run     [COMMON_OPTIONS] --manifest FILE
-parxtract extract [COMMON_OPTIONS] [PATH ...]
-parxtract extract [COMMON_OPTIONS] --files-from FILE
-parxtract extract [COMMON_OPTIONS] --files0-from FILE
+arcshuttle plan extract [OPTIONS] PATH...
+arcshuttle plan extract [OPTIONS] --files-from FILE
+arcshuttle plan extract [OPTIONS] --files0-from FILE
+arcshuttle plan create  [OPTIONS] PATH...
+arcshuttle plan create  [OPTIONS] --files-from FILE
+arcshuttle plan create  [OPTIONS] --files0-from FILE
+arcshuttle run --manifest FILE [OPTIONS]
+arcshuttle extract [OPTIONS] PATH...
+arcshuttle create  [OPTIONS] PATH...
+
+parxtract plan [OPTIONS] PATH...
+parxtract run --manifest FILE [OPTIONS]
+parxtract extract [OPTIONS] PATH...
 ```
 
-Only `--version` and top-level `--help` precede the subcommand. Write `parxtract plan --quiet ...`, not `parxtract --quiet plan ...`. Use the option terminator for a positional path beginning with `-`:
-
-```sh
-parxtract plan -- ./-archive.zip
-```
-
-## 3. Choosing a command
+`-h` and `--help` display help at their parser level. `--version` prints the CLI name and version. Common options belong after the selected subcommand. The compatibility `parxtract plan` emits schema v1; primary `arcshuttle plan extract` and `plan create` emit schema v2.
 
 | Command | Input | Stdout | Purpose |
 |---|---|---|---|
-| `plan` | Archive paths | `job` JSON Lines | Inspection, classification, output review, and filtering |
-| `run` | A `plan` manifest | `result` records followed by `summary` | Execute a validated plan |
-| `extract` | Archive paths | `result` records followed by `summary` | One-step operation without external filtering |
+| `plan extract` | archive files | schema-v2 `job` records | inspect and plan extraction |
+| `plan create` | regular files or directories | schema-v2 `job` records | inventory and plan independent archives |
+| `run` | v1/v2 JSON Lines manifest | `result` records, then `summary` | validate and execute one shared schedule |
+| `extract` | archive files | `result` records, then `summary` | plan and extract in one invocation |
+| `create` | regular files or directories | `result` records, then `summary` | plan, create, test, and commit archives |
 
-### 3.1 `plan`
+`run --manifest -` reads JSON Lines from stdin. No path command reads stdin implicitly.
 
-`plan` reads all input, normalizes paths, consolidates multipart archives, performs required 7-Zip inspection, classifies jobs, and checks output collisions. `plan_index` preserves normalized input order; `run` applies execution priority.
+## 3. Path input
 
-```sh
-parxtract plan --output-dir /data/out a.7z b.zip
-parxtract plan --files-from paths.txt
-find /data/in -type f -print0 | parxtract plan --files0-from -
-```
+| Form | Encoding | Contract |
+|---|---|---|
+| `PATH...` | OS argument encoding | one or more shell-quoted paths |
+| `--files-from FILE` | UTF-8 | one path per line; empty lines ignored |
+| `--files-from -` | UTF-8 | explicit newline-delimited stdin |
+| `--files0-from FILE` | UTF-8 | NUL-delimited paths; trailing NUL allowed |
+| `--files0-from -` | UTF-8 | explicit NUL-delimited stdin |
 
-With `--on-input-error=fail`, one fatal input error prevents a partial plan from reaching stdout and produces exit 64. With `skip`, valid jobs are emitted and the process exits 1. Inspection warnings also leave the plan valid but can produce exit 1.
+The forms are mutually exclusive. An explicitly empty list is an input error. Relative paths are normalized from the process working directory, and duplicates preserve their first occurrence.
 
-### 3.2 `run`
+Extraction accepts regular archive files only and consolidates common multipart names to the first volume. Creation accepts a regular file or directory. It does not follow symlinks, junctions/reparse points, sockets, devices, or other non-regular entries; any such source or descendant is an input error. Empty directories are inventoried and preserved.
 
-`run` reads the complete manifest through EOF and validates every record and output collision before starting a job.
+## 4. Complete option reference
 
-```sh
-parxtract run --manifest plan.jsonl
-cat plan.jsonl | parxtract run --manifest -
-```
+The scope column uses P for both plan operations, R for `run`, E for `extract`, C for `create`, and A for all four operation parsers.
 
-`--manifest` is required and takes `FILE`. `FILE` is a UTF-8 JSON Lines file; `-` means stdin. It cannot be a positional argument. The current implementation writes results after all jobs finish and then writes a final `summary`; callers must read through EOF.
+| Option | Value | Default | Scope | Meaning |
+|---|---|---|---|---|
+| `-h`, `--help` | flag | - | all parser levels | show contextual help |
+| `--version` | flag | - | top level | print version and exit |
+| `--7z PATH` | path or command | discovery | A | select the 7-Zip executable |
+| `--output-dir DIR` | path | source parent | A | root for independent final outputs |
+| `--existing {fail,skip,rename}` | enum | `fail` | A | non-destructive existing-output policy |
+| `--cpu-budget N or auto` | integer or `auto` | logical CPUs minus one | A | total CPU tokens |
+| `--max-processes N` | positive integer | `min(4,cpu_budget)` | A | concurrent 7-Zip process limit |
+| `--storage-profile {auto,hdd,ssd,nvme}` | enum | `auto` | A | conservative I/O-slot default selector |
+| `--io-slots N` | positive integer | profile-derived | A | total I/O tokens |
+| `--heavy-threads N` | positive integer | `min(4,cpu_budget)` | A | scalable-job CPU/thread cap |
+| `--small-threshold SIZE` | size | `64M` | A | classify smaller inputs as `small` |
+| `--inspect-threshold SIZE` | size | `64M` | A | extraction inspection threshold |
+| `--inspect-timeout SECONDS` | nonnegative number | `30` | A | extraction listing timeout |
+| `--reservation-delay SECONDS` | nonnegative number | `30` | A | wait before reserving for queue head |
+| `--sequential-if-total-below SIZE` | size | `0` | A | force small batches to one process/I/O slot |
+| `--log-dir DIR` | path | `.arcshuttle/logs` | A | run-log root |
+| `--config FILE` | path | none | A | explicit TOML file; no global file is implicit |
+| `--quiet` | flag | false | A | suppress version/progress stderr, not errors |
+| `--fail-fast` | flag | false | A | stop new starts after a failed job |
+| `--allow-changed` | flag | false | A | continue after a safe source identity change warning |
+| `--on-input-error {fail,skip}` | enum | `fail` | A | suppress all plan output or retain valid jobs |
+| `--files-from FILE` | path or `-` | none | P/E/C | explicit newline path source |
+| `--files0-from FILE` | path or `-` | none | P/E/C | explicit NUL path source |
+| `--manifest FILE` | path or `-` | required | R | complete JSON Lines manifest |
+| `--format {7z,zip}` | enum | `7z` | create plan/C | output archive format |
+| `--level 0..9` | integer | `5` | create plan/C | compression level; 0 is store mode |
 
-One failure does not stop other jobs by default. `--fail-fast` prevents new starts after a detected failure, waits for running jobs, and marks jobs that never start as `skipped`.
+Size values are nonnegative integers with optional binary suffixes `K`, `M`, `G`, `T`, `P`, or `E`, with optional `B` or `iB`. For example, `64M` and `1GiB` are accepted; `1.5G` is not.
 
-### 3.3 `extract`
+`--existing rename` produces `name (2).7z`, `name (3).zip`, or the equivalent extraction directory. There is no overwrite option.
 
-`extract` performs `plan` followed by `run` internally. Use it when no plan editing is needed.
+## 5. Creation contract
 
-```sh
-parxtract extract --output-dir /data/out --existing rename a.7z b.zip
-```
+Creation v1 makes exactly one archive per input source. It does not combine several inputs into one archive. A future multi-source manifest may add that capability explicitly.
 
-With the default input-error policy, a fatal input error prevents all extraction.
+| Source | Default destination | Stored archive root |
+|---|---|---|
+| directory `photos/` | `photos.7z` | contents of `photos/`, not an extra `photos/` prefix |
+| file `data.bin` | `data.bin.7z` | basename `data.bin` only |
 
-## 4. Input-source options
+`--output-dir DIR` places each default archive name directly below `DIR`. `--format zip` changes the suffix to `.zip`. Levels are 0–9; the planned methods are LZMA2 for 7z and Deflate for zip. Level 0 tells 7-Zip to store rather than compress. Arbitrary raw 7-Zip options are not accepted.
 
-These apply only to `plan` and `extract`.
+Planning recursively inventories normalized relative paths, entry kind, regular-file size, and nanosecond mtime. It records total regular-file size, file count, directory count, latest mtime, a deterministic digest, and a source identity. Immediately before execution, the source is inventoried again. An identity change fails by default; `--allow-changed` permits metadata/content-set changes with a warning, but never permits a source-kind change or non-regular entry.
 
-| Form | Meaning | Encoding | Notes |
-|---|---|---|---|
-| `PATH...` | One or more positional paths | OS argument rules | Shell quoting may be required |
-| `--files-from FILE` | One path per line | UTF-8 | Cannot represent a newline in a path |
-| `--files-from -` | Newline-delimited stdin | UTF-8 | stdin is never read implicitly |
-| `--files0-from FILE` | NUL-delimited paths | UTF-8 | Can represent newlines in paths |
-| `--files0-from -` | NUL-delimited stdin | UTF-8 | For `find -print0` or `fd --print0` |
+The destination, staging directory, and log root must not be inside a directory source. The check uses normalized/resolved path relationships, not name-based exclusions.
 
-The three forms are mutually exclusive, and explicitly empty input is an error. Relative paths become absolute from the process working directory. Missing paths and directories are rejected. Normalized duplicates retain their first occurrence; matching is case-insensitive on Windows. Prefer file input when command-line length is a concern.
+Create scheduling:
 
-## 5. Common options
+| Rule | Profile | CPU tokens and threads | Reason |
+|---|---|---:|---|
+| size below `small_threshold` | `small` | 1 | `create-below-small-threshold` |
+| level 0 and not small | `heavy-serial` | 1 | `create-store-mode` |
+| other 7z | `heavy-scalable` | `min(heavy_threads,cpu_budget)` | `create-7z-lzma2` |
+| other zip | `heavy-scalable` | `min(heavy_threads,cpu_budget)` | `create-zip-deflate` |
 
-All subcommands accept these options syntactically. `P` means planning and `R` means execution.
+CPU tokens and `-mmt=N` do not strictly bound memory. LZMA2 memory use also depends on dictionary and method settings. ArcShuttle 0.2.0 has no memory-token or dynamic-memory controller.
 
-| Option | Value | Default | Phase | Meaning |
-|---|---|---:|:---:|---|
-| `--7z PATH` | Path or command | auto-discovery | P/R | 7-Zip CLI for inspection and extraction |
-| `--output-dir DIR` | Directory | archive parent | P | Planned final-output root; `run` uses manifest `output_dir` instead |
-| `--existing {fail,skip,rename}` | Enum | `fail` | R | Non-destructive policy for existing final output |
-| `--cpu-budget N\|auto` | Positive integer or `auto` | `max(1, CPU count-1)` | P/R | Shared CPU-token total and heavy-job planning limit |
-| `--max-processes N` | Positive integer | `min(4,cpu_budget)` | R | Maximum simultaneous 7-Zip processes |
-| `--storage-profile {auto,hdd,ssd,nvme}` | Enum | `auto` | R | Select default I/O slots |
-| `--io-slots N` | Positive integer | profile-dependent | R | Shared I/O-token total |
-| `--heavy-threads N` | Positive integer | `min(4,cpu_budget)` | P | Maximum tokens/threads planned for `heavy-scalable` |
-| `--small-threshold SIZE` | Size | `64M` | P | Smaller compressed files are `small` |
-| `--inspect-threshold SIZE` | Size | `64M` | P | Known formats at or above this receive technical listing |
-| `--inspect-timeout SECONDS` | Nonnegative number | `30` | P | Inspection timeout per archive |
-| `--reservation-delay SECONDS` | Nonnegative number | `30` | R | Wait before reserving resources for the queue head |
-| `--sequential-if-total-below SIZE` | Size | `0` | R | Below threshold use one process/I/O slot; 0 disables |
-| `--log-dir DIR` | Directory | `./.parxtract/logs` | R | Execution-log root |
-| `--config FILE` | TOML file | none | P/R | Explicit configuration; no implicit global config |
-| `--quiet` | Flag | false | P/R | Suppress selected-7-Zip and non-warning progress, not JSON |
-| `--fail-fast` | Flag | false | R | Stop starting jobs after the first failure |
-| `--allow-changed` | Flag | false | R | Run with warning after source size/mtime changes |
-| `--on-input-error {fail,skip}` | Enum | `fail` | P | Reject all input or plan only valid input |
-| `-h`, `--help` | Flag | - | P/R | Show subcommand help |
+## 6. Extraction contract
 
-Warnings and errors remain visible with `--quiet`.
+The default extraction directory removes known archive and multipart suffixes: `a.7z` becomes `a/`, `b.tar.gz` becomes `b/`, `c.7z.001` becomes `c/`, and `d.part01.rar` becomes `d/`.
 
-### 5.1 Size values
+Recognized multipart families include `.7z.001`, `.zip.001`, `.part1.rar`, `.part01.rar`, old `.rar` plus `.r00`, and `.zip` plus `.z01`. Supplying a later volume locates the first volume in the same directory or produces an input error.
 
-A size is a nonnegative integer with an optional case-insensitive binary suffix: `K`, `M`, `G`, `T`, `P`, `E`, their `KB` forms, or their `KiB` forms. Thus `64M` is 64 × 1024² bytes and `1GiB` is 1024³ bytes. Decimal forms such as `1.5G` are rejected.
+Large or unknown-format archives receive a bounded `7z l -slt` inspection. Missing metadata remains null. A timeout/failure warns and classifies conservatively. Positively identified encrypted archives fail at execution; password input and password search are not supported.
 
-### 5.2 Existing-output policy
+Extraction profiles are `small`, `heavy-scalable` for evidence such as BZip2 or multiple independent 7z blocks, and `heavy-serial` for conservative/failed-inspection cases.
 
-`--existing fail` marks the job `failed` without starting 7-Zip. `skip` marks it `skipped`. `rename` selects `name (2)`, `name (3)`, and so on. There is no `overwrite` value or destructive existing-output option.
+## 7. Configuration
 
-### 5.3 Storage profiles
-
-Without explicit `--io-slots`, `hdd` uses 1, `ssd` uses 2, `nvme` uses 4, and `auto` uses `min(2,max_processes)`. Storage hardware is not detected; `auto` is a conservative formula, not device identification.
-
-## 6. Configuration
-
-Precedence is:
+Precedence, highest first:
 
 ```text
-CLI > environment variable > --config TOML > built-in default
+CLI
+ARCSHUTTLE_* environment
+PARXTRACT_* legacy environment
+[arcshuttle] TOML
+[parxtract] legacy TOML
+legacy root-level TOML
+built-in defaults
 ```
 
-TOML settings may be in `[parxtract]` or at the file root. Unknown keys are errors. A file is read only when named by `--config`. The key is `sevenzip`, not `7z`.
+New names override legacy names. Legacy environment/TOML/root forms accept only fields that existed before creation; `create_format` and `compression_level` are new-only. Unknown TOML keys are errors. A TOML file is read only when `--config` names it.
 
 ```toml
-[parxtract]
-sevenzip = "C:/Program Files/7-Zip/7z.exe"
-output_dir = "D:/Extracted"
+[arcshuttle]
+sevenzip = "/opt/7zip/7zz"
+output_dir = "/data/out"
 existing = "rename"
 cpu_budget = 8
 max_processes = 4
@@ -178,62 +188,45 @@ inspect_threshold = "64M"
 inspect_timeout = 30
 reservation_delay = 30
 sequential_if_total_below = 0
-log_dir = "D:/Logs/parxtract"
+log_dir = "/data/logs"
 quiet = false
 fail_fast = false
 allow_changed = false
 on_input_error = "fail"
+create_format = "7z"
+compression_level = 5
 ```
 
-| TOML key | Environment variable |
-|---|---|
-| `sevenzip` | `PARXTRACT_7Z` |
-| `output_dir` | `PARXTRACT_OUTPUT_DIR` |
-| `existing` | `PARXTRACT_EXISTING` |
-| `cpu_budget` | `PARXTRACT_CPU_BUDGET` |
-| `max_processes` | `PARXTRACT_MAX_PROCESSES` |
-| `storage_profile` | `PARXTRACT_STORAGE_PROFILE` |
-| `io_slots` | `PARXTRACT_IO_SLOTS` |
-| `heavy_threads` | `PARXTRACT_HEAVY_THREADS` |
-| `small_threshold` | `PARXTRACT_SMALL_THRESHOLD` |
-| `inspect_threshold` | `PARXTRACT_INSPECT_THRESHOLD` |
-| `inspect_timeout` | `PARXTRACT_INSPECT_TIMEOUT` |
-| `reservation_delay` | `PARXTRACT_RESERVATION_DELAY` |
-| `sequential_if_total_below` | `PARXTRACT_SEQUENTIAL_IF_TOTAL_BELOW` |
-| `log_dir` | `PARXTRACT_LOG_DIR` |
-| `quiet` | `PARXTRACT_QUIET` |
-| `fail_fast` | `PARXTRACT_FAIL_FAST` |
-| `allow_changed` | `PARXTRACT_ALLOW_CHANGED` |
-| `on_input_error` | `PARXTRACT_ON_INPUT_ERROR` |
+| TOML key | New environment | Legacy environment |
+|---|---|---|
+| `sevenzip` | `ARCSHUTTLE_7Z` | `PARXTRACT_7Z` |
+| `output_dir` | `ARCSHUTTLE_OUTPUT_DIR` | `PARXTRACT_OUTPUT_DIR` |
+| `existing` | `ARCSHUTTLE_EXISTING` | `PARXTRACT_EXISTING` |
+| `cpu_budget` | `ARCSHUTTLE_CPU_BUDGET` | `PARXTRACT_CPU_BUDGET` |
+| `max_processes` | `ARCSHUTTLE_MAX_PROCESSES` | `PARXTRACT_MAX_PROCESSES` |
+| `storage_profile` | `ARCSHUTTLE_STORAGE_PROFILE` | `PARXTRACT_STORAGE_PROFILE` |
+| `io_slots` | `ARCSHUTTLE_IO_SLOTS` | `PARXTRACT_IO_SLOTS` |
+| `heavy_threads` | `ARCSHUTTLE_HEAVY_THREADS` | `PARXTRACT_HEAVY_THREADS` |
+| `small_threshold` | `ARCSHUTTLE_SMALL_THRESHOLD` | `PARXTRACT_SMALL_THRESHOLD` |
+| `inspect_threshold` | `ARCSHUTTLE_INSPECT_THRESHOLD` | `PARXTRACT_INSPECT_THRESHOLD` |
+| `inspect_timeout` | `ARCSHUTTLE_INSPECT_TIMEOUT` | `PARXTRACT_INSPECT_TIMEOUT` |
+| `reservation_delay` | `ARCSHUTTLE_RESERVATION_DELAY` | `PARXTRACT_RESERVATION_DELAY` |
+| `sequential_if_total_below` | `ARCSHUTTLE_SEQUENTIAL_IF_TOTAL_BELOW` | `PARXTRACT_SEQUENTIAL_IF_TOTAL_BELOW` |
+| `log_dir` | `ARCSHUTTLE_LOG_DIR` | `PARXTRACT_LOG_DIR` |
+| `quiet` | `ARCSHUTTLE_QUIET` | `PARXTRACT_QUIET` |
+| `fail_fast` | `ARCSHUTTLE_FAIL_FAST` | `PARXTRACT_FAIL_FAST` |
+| `allow_changed` | `ARCSHUTTLE_ALLOW_CHANGED` | `PARXTRACT_ALLOW_CHANGED` |
+| `on_input_error` | `ARCSHUTTLE_ON_INPUT_ERROR` | `PARXTRACT_ON_INPUT_ERROR` |
+| `create_format` | `ARCSHUTTLE_CREATE_FORMAT` | not accepted |
+| `compression_level` | `ARCSHUTTLE_COMPRESSION_LEVEL` | not accepted |
 
-Boolean environment values accept `1/0`, `true/false`, `yes/no`, and `on/off`.
+Boolean environment values accept `1/0`, `true/false`, `yes/no`, and `on/off` without case sensitivity.
 
-## 7. 7-Zip discovery and inspection
+7-Zip discovery uses explicit `--7z` or configured value, then `7zz`, `7z`, `7za` on PATH, then standard Windows install locations. The selected executable/version is printed on stderr unless `--quiet` is set.
 
-Discovery order is `--7z`, `PARXTRACT_7Z`, `7zz` on `PATH`, `7z` on `PATH`, `7za` on `PATH`, then Windows `Program Files/7-Zip/7z.exe`. The selected executable and version go to stderr unless `--quiet` is set.
+## 8. Shared scheduling
 
-7-Zip starts with an argument array, closed stdin, and `shell=False`; `--` precedes the archive path. Automatically recognized extensions are:
-
-```text
-.7z .zip .rar .tar .tar.gz .tgz .tar.bz2 .tbz2
-.tar.xz .txz .gz .bz2 .xz
-```
-
-Unknown extensions supplied directly are inspected rather than rejected by suffix alone. Technical listing occurs when compressed size is at least `inspect_threshold` or format is unknown. Unavailable values remain `null`. Inspection failure/timeout adds a warning and selects conservative `heavy-serial`. Confirmed encryption fails the job during execution.
-
-## 8. Multipart archives
-
-The following sets become one job for their first volume: `name.7z.001`, `name.zip.001`, `name.part1.rar`, `name.part01.rar`, `name.rar` with `.r00` parts, and `name.zip` with `.z01` parts. Supplying a later volume searches its directory for the first; absence is an input error. Never execute parts as separate jobs.
-
-## 9. Classification and scheduling
-
-| Profile | Automatic rule | CPU tokens | Threads |
-|---|---|---:|---:|
-| `small` | Below `small_threshold` | 1 | 1 |
-| `heavy-scalable` | BZip2 or multi-block 7z | `min(heavy_threads,cpu_budget)` | CPU tokens |
-| `heavy-serial` | Large without scaling evidence, or failed inspection | 1 | 1 |
-
-Every job uses one I/O token. Classification is not a performance guarantee. Runtime always preserves:
+One mixed manifest uses one scheduler and always maintains:
 
 ```text
 sum(cpu_tokens) <= cpu_budget
@@ -241,28 +234,55 @@ running_jobs     <= max_processes
 sum(io_tokens)  <= io_slots
 ```
 
-Order is descending `scheduling.priority`, then `heavy-scalable`, `heavy-serial`, `small`, descending `estimated_weight`, and ascending `plan_index`. Later fitting jobs may backfill when the head does not fit. After the head waits `reservation_delay`, new backfills stop so resources can drain for it.
+Order is priority descending, profile rank (`heavy-scalable`, `heavy-serial`, `small`), estimated weight descending, then plan index. A fitting later job may backfill while the head cannot fit. Once the head waits `reservation_delay`, new backfill stops until it can run.
 
-## 10. Output and staging
+`--fail-fast` stops new starts after a failed result, lets already running jobs finish, and reports unstarted jobs as skipped. Interruption stops new starts, signals managed child process groups, waits/terminates them safely, and reports interruption. The final v2 result order is deterministic plan order, not completion order.
 
-The default output is beside the archive, without archive suffixes: `a.7z` → `a`, `b.tar.gz` → `b`, `c.7z.001` → `c`, `d.part01.rar` → `d`. Planning-time `--output-dir DIR` produces `DIR/<output-name>`.
+## 9. Manifest contract
 
-Execution creates `.parxtract-<job-id>-<random>.tmp` beside final output, writes an ownership marker, and extracts into it. Only a 7-Zip exit 0 followed by a final nonexistence check commits it through an atomic same-filesystem rename. Exit 1, exit 2+, interruption, or commit failure retains it as `.failed`; consult `staging_dir`. A directory without verified ownership is never deleted or renamed.
+### 9.1 Schema v2
 
-## 11. JSON Lines contract
+Both primary planners emit records shaped as follows:
 
-UTF-8 is required. Each nonempty line is one complete JSON object. Stdout contains no non-JSON text. Current `schema_version` is `1`; unknown values are `null`.
+```json
+{
+  "schema_version": 2,
+  "record_type": "job",
+  "operation": "create",
+  "job_id": "deterministic-id",
+  "plan_index": 0,
+  "source": {
+    "path": "/absolute/source",
+    "kind": "directory",
+    "size": 1048576,
+    "mtime_ns": 123456789,
+    "entry_count": 42,
+    "identity": "sha256:..."
+  },
+  "destination": {"path": "/absolute/source.7z", "kind": "archive"},
+  "archive": {"format": "7z", "method": "LZMA2", "compression_level": 5},
+  "scheduling": {
+    "profile": "heavy-scalable",
+    "profile_source": "auto",
+    "classification_reason": "create-7z-lzma2",
+    "priority": 0,
+    "estimated_weight": 1048576,
+    "cpu_tokens": 4,
+    "threads": 4,
+    "io_tokens": 1
+  },
+  "tags": [],
+  "warnings": [],
+  "integrity": "sha256:..."
+}
+```
 
-### 11.1 Plan records
+Extraction uses operation `extract`, source kind `file`, destination kind `directory`, and best-effort archive inspection fields.
 
-Each `record_type: "job"` record includes deterministic `job_id`, input-order `plan_index`, absolute `path` and `output_dir`, planning-time `source.size` and `source.mtime_ns`, best-effort `archive` data, `scheduling`, `tags`, `warnings`, and an `integrity` digest protecting immutable fields.
-
-### 11.2 Editable fields
-
-An external filter may change exactly these six fields:
+External filters may change only:
 
 ```text
-output_dir
+destination.path
 scheduling.profile
 scheduling.priority
 scheduling.cpu_tokens
@@ -270,140 +290,159 @@ scheduling.threads
 tags
 ```
 
-It must not modify `path`, `job_id`, `source`, `archive`, `plan_index`, `scheduling.io_tokens`, `scheduling.estimated_weight`, `scheduling.classification_reason`, `warnings`, or `integrity`. Do not recalculate `integrity` after permitted edits.
-
-`run` clamps CPU tokens to `cpu_budget` and threads to assigned CPU tokens, adding a warning. A manifest whose I/O tokens exceed budget is rejected. A profile override is recorded as `manifest-override`.
+All other fields are integrity-protected. An edited destination must remain absolute, unique, and safe. CPU/thread overrides are type-checked and clamped to the configured CPU budget with warnings; I/O tokens are immutable and must fit. Do not recalculate or remove `integrity`.
 
 ```sh
-jq -c '
-  select(.archive.encrypted != true)
-  | if (.tags | index("urgent")) then .scheduling.priority = 100 else . end
-' plan.jsonl > filtered.jsonl
+arcshuttle plan create dir-a dir-b |
+  jq -c 'if .tags | index("urgent") then .scheduling.priority = 100 else . end' |
+  arcshuttle run --manifest -
 ```
 
-### 11.3 Results and summary
+### 9.2 Schema-v1 compatibility
 
-Result status is `success` only for 7-Zip exit 0 and successful commit. `warning` means 7-Zip exit 1; `failed` covers validation, launch, 7-Zip, or commit failure; `skipped` covers existing output or a fail-fast non-start; `interrupted` means user interruption. Only success commits final output. `exit_code` can be `null` if 7-Zip never started. `staging_dir` is `null` on success or an absolute retained path.
+`parxtract plan` still emits the unchanged extraction-only v1 structure with `path` and `output_dir`. `arcshuttle run` and `parxtract run` accept v1 and convert it internally to extraction jobs. The v1 editable allowlist remains `output_dir`, the same four scheduling override fields, and `tags`. V1 results retain their legacy shape and do not acquire v2-only fields.
 
-The final record is always `record_type: "summary"` and contains `run_id`, `total`, `success`, `warning`, `failed`, `skipped`, `interrupted`, and `duration_ms`.
+A manifest may mix v1 extraction jobs with v2 jobs; the overall summary is schema v2 when any v2 input is present.
 
-## 12. Logs
+## 10. Staging, verification, results, and logs
 
-The default is `<current-directory>/.parxtract/logs/<run-id>/<job-id>/`. Each job directory contains `metadata.json`, `stdout.log`, and `stderr.log`. Metadata records actual arguments, timestamps, resources, exit status, interruption, and launch errors. 7-Zip output streams directly to files instead of accumulating in memory.
+### 10.1 Extraction
 
-## 13. Process exit codes
+Extraction creates `.arcshuttle-<job-id>-<random>.tmp` beside the final directory, writes `.arcshuttle-owned`, and runs 7-Zip there. Exit 0 commits after a second destination check. Warning, failure, or interruption retains owned staging as `.failed`. Unowned paths are never moved or deleted.
 
-| Code | Meaning | JSON possible |
+### 10.2 Creation
+
+Creation performs this order:
+
+1. reject unsafe source/destination/log relationships;
+2. re-inventory and compare source identity;
+3. resolve `--existing` without overwriting;
+4. create a private, ownership-marked sibling staging directory;
+5. run `7z a` with a controlled working directory, relative source argument, closed stdin, argument array, and `shell=False`;
+6. require create exit 0 and a regular staged archive;
+7. run `7z t` and require verification exit 0;
+8. recheck destination nonexistence and atomically publish without clobbering;
+9. remove only an owned empty staging directory.
+
+Any create/test warning, failure, interruption, or pre-commit problem retains staging as `.failed`. Source paths are never moved, modified, or deleted.
+
+### 10.3 Results
+
+Statuses are `success`, `warning`, `failed`, `skipped`, and `interrupted`. Every v2 result includes `operation`, `output_path`, `staging_path`, and the legacy aliases `output_dir`/`staging_dir`. Create results also include `create_exit_code` and `verification_exit_code`; either can be null if that process did not start. `log_path` points to job logs when present.
+
+The final record is a `summary` with total and counts for all five statuses plus `duration_ms`.
+
+| Process exit | Meaning | JSON Lines may exist |
 |---:|---|:---:|
-| 0 | All jobs succeeded without warnings | Yes |
-| 1 | Warning or skip, no failure | Yes |
-| 2 | One or more failures | Yes |
-| 64 | CLI, configuration, input-format, or manifest error | Normally no |
-| 130 | User interruption | Possibly |
+| 0 | all jobs succeeded without warnings | yes |
+| 1 | warning/skip/result warning and no failure | yes |
+| 2 | at least one failed job | yes |
+| 64 | usage, configuration, input, or manifest error | normally no |
+| 130 | interrupted | yes |
 
-An AI agent must parse complete results and the summary when present after exit 1 or 2. JSON parsing failure is distinct from job failure.
+### 10.4 Logs
 
-## 14. PowerShell 7 module
+Default root: `<cwd>/.arcshuttle/logs/<run-id>/<job-id>/`.
+
+Extraction logs are `metadata.json`, `stdout.log`, and `stderr.log`. Creation logs are `metadata.json`, `create.stdout.log`, `create.stderr.log`, `test.stdout.log`, and `test.stderr.log`. Creation metadata records safe actual argument arrays, working directories, allocated CPU/threads, process times/exits, errors, and commit outcome. 7-Zip output never enters JSON stdout.
+
+## 11. PowerShell 7
 
 ```powershell
-Import-Module ./powershell/Parxtract.psm1
+Import-Module ./powershell/ArcShuttle.psm1
+
+Get-ChildItem C:\Sources -Directory |
+    Invoke-ArcShuttleCreatePlan -Format 7z -Level 5 |
+    Invoke-ArcShuttleRun
+
+Get-ChildItem C:\Archives -File |
+    Invoke-ArcShuttleExtract -OutputDir C:\Extracted
 ```
 
-`Invoke-ParxtractPlan` accepts `string` or `FileSystemInfo` pipeline input and emits plan objects. `Invoke-ParxtractRun` accepts plan objects and emits result/summary objects. `Invoke-Parxtract` accepts paths and performs both phases.
+| Function | Pipeline input | Equivalent operation |
+|---|---|---|
+| `Invoke-ArcShuttleExtractPlan` | string or `FileSystemInfo` | `plan extract` |
+| `Invoke-ArcShuttleCreatePlan` | string or `FileSystemInfo` | `plan create`; each item is independent |
+| `Invoke-ArcShuttleRun` | job objects | `run` |
+| `Invoke-ArcShuttleExtract` | string or `FileSystemInfo` | plan then run extraction |
+| `Invoke-ArcShuttleCreate` | string or `FileSystemInfo` | plan then run creation |
 
-| PowerShell | CLI |
-|---|---|
-| `-ParxtractCommand` | command to invoke, default `parxtract` |
-| `-SevenZip` or `-7z` | `--7z` |
-| `-OutputDir` | `--output-dir` |
-| `-Existing` | `--existing` |
-| `-CpuBudget` | `--cpu-budget` |
-| `-MaxProcesses` | `--max-processes` |
-| `-StorageProfile` | `--storage-profile` |
-| `-IoSlots` | `--io-slots` |
-| `-HeavyThreads` | `--heavy-threads` |
-| `-SmallThreshold` | `--small-threshold` |
-| `-InspectThreshold` | `--inspect-threshold` |
-| `-InspectTimeout` | `--inspect-timeout` |
-| `-ReservationDelay` | `--reservation-delay` |
-| `-SequentialIfTotalBelow` | `--sequential-if-total-below` |
-| `-LogDir` | `--log-dir` |
-| `-Config` | `--config` |
-| `-OnInputError` | `--on-input-error` |
-| `-Quiet` | `--quiet` |
-| `-FailFast` | `--fail-fast` |
-| `-AllowChanged` | `--allow-changed` |
+PowerShell parameters map by name: `-ArcShuttleCommand`, `-SevenZip`/`-7z`, `-OutputDir`, `-Existing`, `-CpuBudget`, `-MaxProcesses`, `-StorageProfile`, `-IoSlots`, `-HeavyThreads`, `-SmallThreshold`, `-InspectThreshold`, `-InspectTimeout`, `-ReservationDelay`, `-SequentialIfTotalBelow`, `-LogDir`, `-Config`, `-OnInputError`, `-Quiet`, `-FailFast`, and `-AllowChanged`. Create plan/combined functions also accept `-Format` and `-Level`.
 
-The wrapper uses a BOM-free UTF-8 temporary file and invokes the Python CLI once. It removes temporary files in `finally`, displays Python stderr, parses only stdout with `ConvertFrom-Json`, and exposes status through `$LASTEXITCODE`.
+The module writes BOM-free UTF-8 NUL input or JSON Lines to temporary files, converts stdout with `ConvertFrom-Json`, replays stderr, preserves `$LASTEXITCODE`, and removes temporary files in `finally`.
 
-## 15. POSIX integration
+`powershell/Parxtract.psm1` remains available with `Invoke-ParxtractPlan`, `Invoke-ParxtractRun`, and `Invoke-Parxtract` for legacy examples.
+
+## 12. POSIX examples
 
 ```sh
-find /data/in -type f -print0 |
-  parxtract plan --files0-from - --output-dir /data/out |
-  jq -c 'select(.archive.encrypted != true)' |
-  parxtract run --manifest -
+# Review creation jobs before execution.
+find /data/source -mindepth 1 -maxdepth 1 -print0 |
+  arcshuttle plan create --files0-from - --format 7z > create.jsonl
+jq -e -c 'select(.record_type == "job")' create.jsonl |
+  arcshuttle run --manifest - > results.jsonl
+
+# Extract directly.
+fd --type f --print0 . /data/archives |
+  arcshuttle extract --files0-from - --output-dir /data/out
 ```
 
-Use `set -o pipefail` in Bash when whole-pipeline status matters, but account for a valid plan accompanied by warning exit 1.
+Use `set -o pipefail` when shell pipeline status matters, but remember that plan exit 1 may still carry valid jobs. Capture plan stdout and exit separately when warning policy matters.
 
-```sh
-parxtract plan --files0-from paths.bin > plan.jsonl
-jq -e -c 'select(.record_type == "job")' plan.jsonl > checked.jsonl
-parxtract run --manifest checked.jsonl > results.jsonl
-jq -s 'last | select(.record_type == "summary")' results.jsonl
-```
+## 13. Migration from parxtract 0.1
 
-## 16. AI-agent procedure
+- Install distribution `arcshuttle`; both console scripts are included.
+- Replace `parxtract plan ...` with `arcshuttle plan extract ...` for schema-v2 output.
+- Replace `parxtract extract ...` with `arcshuttle extract ...` when ready; the compatibility command remains functional.
+- Existing schema-v1 manifests remain accepted and are converted internally to extract jobs.
+- New primary plans emit schema v2 with operation/source/destination identity and integrity.
+- Prefer `ARCSHUTTLE_*`; a new variable wins when both new and corresponding `PARXTRACT_*` are set.
+- Prefer `[arcshuttle]`; it overrides `[parxtract]` and root-level values.
+- Creation fields have no legacy environment/TOML aliases.
+- Existing `.parxtract` data is not migrated, renamed, claimed, or deleted. Review it manually; ArcShuttle writes new `.arcshuttle` names.
+- Import `ArcShuttle.psm1` for new PowerShell workflows; `Parxtract.psm1` remains compatible.
 
-1. Check presence/version with `parxtract --version`.
-2. Confirm targets are files; do not pass directories.
-3. Use NUL-delimited input for many or arbitrary paths.
-4. Use `plan` for filtering or priority edits; otherwise use `extract`.
-5. Read only plan stdout as JSON Lines through EOF.
-6. Confirm `record_type == "job"` and edit only permitted fields.
-7. Preserve one JSON object per line for `run --manifest -` or a file.
-8. Read run stdout through EOF and require a final `summary`.
-9. Evaluate process exit, each `status`, and `warnings` together.
-10. Report `staging_dir` and `log_path` for non-success results.
+## 14. AI-agent procedure
 
-AI agents must not parse stderr as JSON; alter forbidden manifest fields; remove or regenerate `integrity`; guess archive passwords; delete existing output to bypass `existing=fail`; delete failed staging; modify source archives; or launch several `run` processes for one shared resource budget.
+1. Verify `arcshuttle --version`, 7-Zip availability, operation, and desired format before planning.
+2. Use NUL input for generated/arbitrary paths. Do not assume implicit stdin.
+3. For creation, verify each requested source should produce its own archive and that output/log roots are outside directory sources.
+4. Capture stdout and stderr separately. Parse stdout as JSON Lines through EOF.
+5. Confirm every planned record is a `job` of the intended operation and all destinations are unique.
+6. If filtering, edit only the v2 allowlist. Never regenerate `integrity` or edit source/archive/inventory/I/O fields.
+7. Pass the complete stream to one `run` process so resource limits remain global.
+8. Read every result and the final summary. Combine statuses, warnings, and process exit for the final determination.
+9. Report non-null `staging_path` and `log_path`; do not delete retained output automatically.
+10. Never inject passwords/raw 7-Zip options, delete existing output, mutate sources, follow rejected links, or create an external overwrite workaround.
+
+Machine decision outline:
 
 ```text
 records = parse_json_lines(stdout_to_eof)
-
-if process_exit == 64 or records is empty:
-    outcome = "invocation-or-output-error"
+if exit == 64 or records is empty:
+    outcome = invocation_error
 else:
-    assert records[-1].record_type == "summary"
-
-if outcome is not set:
-    if process_exit == 130 or records[-1].interrupted > 0:
-        outcome = "interrupted"
-    else if records[-1].failed > 0:
-        outcome = "partial-or-total-failure"
-    else if records[-1].warning > 0 or records[-1].skipped > 0:
-        outcome = "completed-with-non-success-results"
-    else if any(result.warnings is not empty):
-        outcome = "completed-with-warnings"
-    else:
-        outcome = "success"
+    require records[-1].record_type == summary
+    if exit == 130 or summary.interrupted > 0: outcome = interrupted
+    else if summary.failed > 0: outcome = failed_or_partial
+    else if summary.warning > 0 or summary.skipped > 0: outcome = completed_non_success
+    else if any(result.warnings): outcome = completed_with_warnings
+    else: outcome = success
 ```
 
-## 17. Troubleshooting
+## 15. Dependencies, limits, and troubleshooting
 
-| Symptom | Action |
-|---|---|
-| `7-Zip not found` | Check `--7z`, `PARXTRACT_7Z`, and `PATH` |
-| Exit 64 with empty stdout | Read stderr; check syntax, exclusive input, absolute `output_dir`, and integrity |
-| Exit 1 after extraction | Inspect summary, `warnings`, and `skipped` |
-| `source ... changed` | Plan again; use `--allow-changed` only when intended |
-| `immutable manifest fields were modified` | Start from the original plan and edit only six fields |
-| `output collision` | Make each `output_dir` unique |
-| A `.failed` directory remains | Inspect `log_path` and manually recover partial output |
-| HDD throughput is poor | Use `--storage-profile hdd` or `--io-slots 1` |
-| A heavy job waits | Inspect resource budget and `reservation_delay`; reservation is expected |
+The installed package intentionally has zero third-party runtime dependencies. Standard-library implementations keep path, TOML, JSON, hashing, scheduling, and process safety auditable. Hatch development environments add `pytest`, `pytest-timeout`, and Ruff because their isolation, timeout, lint, and formatting behavior provides distinct test/CI value.
 
-## 18. Out of scope
+Creation v1 supports only one source per archive, 7z/zip, levels 0–9, regular entries, and local non-split output. It has no multi-source archive, split creation, encrypted creation, password support, nested recursive processing, raw method tuning, runtime resource redistribution, disk auto-detection, memory budget, GUI, or watch service.
 
-Version 0.1.0 does not provide runtime thread changes, measurement-driven CPU/I/O control, physical-disk detection, recursive nested extraction, source-archive deletion, destructive overwrite, interactive password entry or discovery, a GUI, or watched folders. An AI agent must not silently emulate these features with external destructive actions.
+| Symptom | Check | Safe response |
+|---|---|---|
+| `7-Zip not found` | `--7z`, `ARCSHUTTLE_7Z`, PATH | configure a supported executable |
+| exit 64 and empty stdout | stderr usage/input/manifest error | fix syntax or re-plan; do not fabricate records |
+| exit 1 with output | warnings/skips/result warnings | parse summary and report details |
+| source identity changed | modifications since plan | re-plan; use `--allow-changed` only intentionally |
+| immutable fields modified | external filter | restart from original plan and edit only allowlist |
+| output collision | duplicate derived/edited paths | select unique destinations |
+| `.failed` remains | create/test/extract warning or failure | inspect logs and recover manually |
+| HDD throughput drops | I/O contention | select `hdd` or `--io-slots 1` |
