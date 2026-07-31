@@ -69,12 +69,12 @@ def unique_path(base: Path, suffix: str = "") -> Path:
     """Choose a non-existing path by appending `` (N)`` before *suffix*."""
 
     candidate = base.with_name(base.name + suffix)
-    if not candidate.exists():
+    if not os.path.lexists(candidate):
         return candidate
     index = 2
     while True:
         candidate = base.with_name(f"{base.name} ({index}){suffix}")
-        if not candidate.exists():
+        if not os.path.lexists(candidate):
             return candidate
         index += 1
 

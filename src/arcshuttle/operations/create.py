@@ -6,6 +6,9 @@ import hashlib
 import json
 import os
 import stat
+import sys
+import threading
+import time
 from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
@@ -18,7 +21,11 @@ from ..manifest import (
     deterministic_job_id,
     source_identity,
 )
-from ..util import path_key
+from ..results import job_result
+from ..scheduler import ScheduledJob
+from ..sevenzip import ProcessOutcome, SevenZip
+from ..staging import create_staging, finalize_archive, resolve_existing, retain_failed
+from ..util import isoformat, path_key, utc_now
 from .extract import PlanningResult
 
 _REPARSE_POINT = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400)
@@ -285,3 +292,197 @@ def make_create_plan(inputs: Iterable[Path], config: Config) -> PlanningResult:
             sources = ", ".join(job["source"]["path"] for job in group)
             errors.append(f"output collision at {group[0]['destination']['path']}: {sources}")
     return PlanningResult(jobs, errors, [])
+
+
+def _record_commit(log_directory: Path, **values: object) -> str | None:
+    """Add executor commit state and return a non-fatal logging warning."""
+
+    metadata_path = log_directory / "metadata.json"
+    try:
+        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        metadata = {}
+    metadata["commit"] = values
+    try:
+        metadata_path.parent.mkdir(parents=True, exist_ok=True)
+        metadata_path.write_text(
+            json.dumps(metadata, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+        )
+    except OSError as exc:
+        return f"could not record commit metadata in {metadata_path}: {exc}"
+    return None
+
+
+def execute_job(
+    scheduled: ScheduledJob[dict[str, Any]],
+    stop_event: threading.Event,
+    *,
+    config: Config,
+    sevenzip: SevenZip,
+    run_id: str,
+    log_root: Path,
+    progress_lock: threading.Lock,
+    program_name: str,
+) -> dict[str, Any]:
+    """Create, verify, and atomically commit one archive job."""
+
+    job = scheduled.payload
+    started = isoformat(utc_now())
+    start_clock = time.monotonic()
+    desired = Path(job["destination"]["path"])
+    final = desired
+    staging: Path | None = None
+    log_path = log_root / job["job_id"]
+    warnings = list(job["warnings"])
+    create_exit_code: int | None = None
+    test_exit_code: int | None = None
+
+    def finish(status: str, *, error: str | None = None) -> dict[str, Any]:
+        if error:
+            warnings.append(error)
+        duration_ms = round((time.monotonic() - start_clock) * 1000)
+        result = job_result(
+            job=job,
+            run_id=run_id,
+            status=status,
+            started_at=started,
+            finished_at=isoformat(utc_now()),
+            duration_ms=duration_ms,
+            exit_code=create_exit_code,
+            output_path=str(final),
+            staging_path=str(staging) if staging is not None else None,
+            log_path=str(log_path) if log_path.exists() else None,
+            warnings=warnings,
+        )
+        result["create_exit_code"] = create_exit_code
+        result["test_exit_code"] = test_exit_code
+        if not config.quiet:
+            with progress_lock:
+                print(
+                    f"{program_name}: {status} {duration_ms / 1000:.2f}s {job['source']['path']}",
+                    file=sys.stderr,
+                )
+        return result
+
+    def retain(status: str, error: str) -> dict[str, Any]:
+        nonlocal staging
+        if staging is not None:
+            try:
+                staging = retain_failed(staging, job["job_id"])
+            except OSError as exc:
+                warnings.append(str(exc))
+        metadata_warning = _record_commit(
+            log_path,
+            status="not-committed",
+            final_path=str(final),
+            staging_path=str(staging) if staging is not None else None,
+            error=error,
+        )
+        if metadata_warning:
+            warnings.append(metadata_warning)
+        return finish(status, error=error)
+
+    if stop_event.is_set():
+        return finish("interrupted", error="not started after interruption")
+    source_path = Path(job["source"]["path"])
+    if job["source"]["kind"] == "directory":
+        log_base = config.log_dir or (Path.cwd() / ".arcshuttle" / "logs")
+        for label, candidate in (
+            ("destination", desired),
+            ("log directory", log_base.resolve(strict=False)),
+        ):
+            if _contains(source_path, candidate) or _contains(
+                source_path.resolve(strict=False), candidate.resolve(strict=False)
+            ):
+                return finish(
+                    "failed", error=f"{label} is inside the source directory: {candidate}"
+                )
+    try:
+        current = inventory_source(source_path)
+    except OSError as exc:
+        return finish("failed", error=f"cannot inventory source before creation: {exc}")
+    if current.kind != job["source"]["kind"]:
+        return finish("failed", error="source kind changed after planning")
+    if current.identity != job["source"]["identity"]:
+        message = "source identity changed after planning"
+        if not config.allow_changed:
+            return finish("failed", error=message)
+        warnings.append(message + "; continuing because --allow-changed was supplied")
+    try:
+        final, skipped = resolve_existing(desired, config.existing, suffix=desired.suffix)
+    except FileExistsError as exc:
+        return finish("failed", error=str(exc))
+    if skipped:
+        return finish("skipped", error="output already exists")
+    try:
+        staging = create_staging(final, job["job_id"])
+    except OSError as exc:
+        return finish("failed", error=f"cannot create staging directory: {exc}")
+    staged_archive = staging / final.name
+    try:
+        create_outcome: ProcessOutcome = sevenzip.create(
+            source=source_path,
+            source_kind=job["source"]["kind"],
+            archive=staged_archive,
+            archive_format=job["archive"]["format"],
+            method=job["archive"]["method"],
+            compression_level=job["archive"]["compression_level"],
+            threads=job["scheduling"]["threads"],
+            log_directory=log_path,
+            cpu_tokens=job["scheduling"]["cpu_tokens"],
+            stop_event=stop_event,
+        )
+    except OSError as exc:
+        return retain("failed", f"cannot run archive creation: {exc}")
+    create_exit_code = create_outcome.exit_code
+    if create_outcome.interrupted:
+        return retain("interrupted", create_outcome.error or "archive creation was interrupted")
+    if (
+        create_outcome.error is not None
+        or create_outcome.exit_code is None
+        or create_outcome.exit_code >= 2
+    ):
+        return retain("failed", create_outcome.error or "7-Zip archive creation failed")
+    if create_outcome.exit_code == 1:
+        return retain("warning", "7-Zip archive creation completed with warnings")
+    if not staged_archive.is_file():
+        return retain("failed", "7-Zip reported success but did not create a regular archive")
+
+    try:
+        test_outcome: ProcessOutcome = sevenzip.test(
+            archive=staged_archive,
+            log_directory=log_path,
+            stop_event=stop_event,
+        )
+    except OSError as exc:
+        return retain("failed", f"cannot run archive verification: {exc}")
+    test_exit_code = test_outcome.exit_code
+    if test_outcome.interrupted:
+        return retain("interrupted", test_outcome.error or "archive verification was interrupted")
+    if (
+        test_outcome.error is not None
+        or test_outcome.exit_code is None
+        or test_outcome.exit_code >= 2
+    ):
+        return retain("failed", test_outcome.error or "7-Zip archive verification failed")
+    if test_outcome.exit_code == 1:
+        return retain("warning", "7-Zip archive verification completed with warnings")
+
+    if os.path.lexists(final):
+        if config.existing == "rename":
+            final, _ = resolve_existing(final, "rename", suffix=final.suffix)
+        else:
+            return retain("failed", f"output appeared before finalization: {final}")
+    try:
+        cleanup_warning = finalize_archive(staging, staged_archive, final, job["job_id"])
+    except OSError as exc:
+        return retain("failed", f"cannot commit verified archive: {exc}")
+    staging = None
+    if cleanup_warning:
+        warnings.append(cleanup_warning)
+    metadata_warning = _record_commit(
+        log_path, status="committed", final_path=str(final), error=cleanup_warning
+    )
+    if metadata_warning:
+        warnings.append(metadata_warning)
+    return finish("success")

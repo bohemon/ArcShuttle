@@ -16,6 +16,11 @@ def load_config(path: Path) -> dict[str, object]:
         return {}
 
 
+def configured(path: Path) -> dict[str, object]:
+    explicit = os.environ.get("FAKE7Z_CONFIG")
+    return load_config(Path(explicit)) if explicit else load_config(path)
+
+
 def main() -> int:
     args = sys.argv[1:]
     if not args:
@@ -23,7 +28,7 @@ def main() -> int:
         return 0
     command = args[0]
     archive = Path(args[-1])
-    config = load_config(archive)
+    config = configured(archive)
     if command == "l":
         listing = config.get("listing")
         if isinstance(listing, str):
@@ -41,6 +46,44 @@ def main() -> int:
             print("Encrypted = -")
         print(str(config.get("listing_stderr", "")), file=sys.stderr)
         return int(config.get("listing_exit", 0))
+    if command == "a":
+        separator = args.index("--")
+        output = Path(args[separator + 1])
+        source_argument = args[separator + 2]
+        time.sleep(float(config.get("create_sleep", 0)))
+        if config.get("create_archive", True):
+            output.parent.mkdir(parents=True, exist_ok=True)
+            output.write_text(json.dumps(config), encoding="utf-8")
+        state = os.environ.get("FAKE7Z_STATE")
+        if state:
+            state_path = Path(state)
+            state_path.mkdir(parents=True, exist_ok=True)
+            (state_path / f"a-{os.getpid()}.json").write_text(
+                json.dumps(
+                    {
+                        "args": args,
+                        "cwd": str(Path.cwd()),
+                        "source_argument": source_argument,
+                    }
+                ),
+                encoding="utf-8",
+            )
+        print(str(config.get("create_stdout", "fake create stdout")))
+        print(str(config.get("create_stderr", "fake create stderr")), file=sys.stderr)
+        return int(config.get("create_exit", 0))
+    if command == "t":
+        archive = Path(args[-1])
+        config = configured(archive)
+        state = os.environ.get("FAKE7Z_STATE")
+        if state:
+            state_path = Path(state)
+            state_path.mkdir(parents=True, exist_ok=True)
+            (state_path / f"t-{os.getpid()}.json").write_text(
+                json.dumps({"args": args, "cwd": str(Path.cwd())}), encoding="utf-8"
+            )
+        print(str(config.get("test_stdout", "fake test stdout")))
+        print(str(config.get("test_stderr", "fake test stderr")), file=sys.stderr)
+        return int(config.get("test_exit", 0))
     if command != "x":
         return 7
     output_switch = next(arg for arg in args if arg.startswith("-o"))
