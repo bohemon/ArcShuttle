@@ -39,6 +39,7 @@ packages = ["src/parxtract"]
 
 [tool.hatch.build.targets.wheel.force-include]
 "powershell/Parxtract.psm1" = "parxtract/powershell/Parxtract.psm1"
+"docs/COMMAND_MANUAL.en.md" = "parxtract/docs/COMMAND_MANUAL.en.md"
 "docs/COMMAND_MANUAL.ja.md" = "parxtract/docs/COMMAND_MANUAL.ja.md"
 
 [tool.hatch.envs.default]
