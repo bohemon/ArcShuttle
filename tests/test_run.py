@@ -123,7 +123,7 @@ def test_allow_changed_continues_with_warning(tmp_path: Path) -> None:
 def test_existing_policies(tmp_path: Path, policy: str, status: str, expected_code: int) -> None:
     config = base_config(tmp_path, existing=policy)
     _, job = create_job(tmp_path, config)
-    Path(job["output_dir"]).mkdir(parents=True)
+    Path(job["destination"]["path"]).mkdir(parents=True)
 
     results, _, actual_code = execute_manifest([job], config, StubSevenZip())
 

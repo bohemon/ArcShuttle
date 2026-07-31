@@ -6,18 +6,20 @@ from collections import Counter
 from collections.abc import Iterable
 from typing import Any
 
-from .manifest import SCHEMA_VERSION
-
 
 def summary_record(
-    run_id: str, results: Iterable[dict[str, Any]], duration_ms: int
+    run_id: str,
+    results: Iterable[dict[str, Any]],
+    duration_ms: int,
+    *,
+    schema_version: int,
 ) -> dict[str, Any]:
     """Aggregate result statuses into the final JSON Lines summary."""
 
     records = list(results)
     counts = Counter(record["status"] for record in records)
     return {
-        "schema_version": SCHEMA_VERSION,
+        "schema_version": schema_version,
         "record_type": "summary",
         "run_id": run_id,
         "total": len(records),
