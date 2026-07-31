@@ -39,6 +39,7 @@ include = [
 packages = ["src/arcshuttle", "src/parxtract"]
 
 [tool.hatch.build.targets.wheel.force-include]
+"powershell/ArcShuttle.psm1" = "arcshuttle/powershell/ArcShuttle.psm1"
 "powershell/Parxtract.psm1" = "arcshuttle/powershell/Parxtract.psm1"
 "docs/COMMAND_MANUAL.en.md" = "arcshuttle/docs/COMMAND_MANUAL.en.md"
 "docs/COMMAND_MANUAL.ja.md" = "arcshuttle/docs/COMMAND_MANUAL.ja.md"

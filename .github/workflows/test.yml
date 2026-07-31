@@ -33,6 +33,8 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
+          Import-Module ./powershell/ArcShuttle.psm1 -Force
+          Get-Command Invoke-ArcShuttleExtractPlan, Invoke-ArcShuttleCreatePlan, Invoke-ArcShuttleRun, Invoke-ArcShuttleExtract, Invoke-ArcShuttleCreate
           Import-Module ./powershell/Parxtract.psm1 -Force
           Get-Command Invoke-ParxtractPlan, Invoke-ParxtractRun, Invoke-Parxtract
 
