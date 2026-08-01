@@ -22,6 +22,24 @@ WHEEL_NAME = f"arcshuttle-{VERSION}-py3-none-any.whl"
 SDIST_NAME = f"arcshuttle-{VERSION}.tar.gz"
 DIST_INFO = f"arcshuttle-{VERSION}.dist-info"
 
+EXPECTED_CLASSIFIERS = {
+    "Environment :: Console",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: System :: Archiving :: Compression",
+}
+
+EXPECTED_PROJECT_URLS = {
+    "Documentation": "https://github.com/bohemon/ArcShuttle/blob/main/docs/COMMAND_MANUAL.en.md",
+    "Issues": "https://github.com/bohemon/ArcShuttle/issues",
+    "Release notes": "https://github.com/bohemon/ArcShuttle/releases",
+    "Source": "https://github.com/bohemon/ArcShuttle",
+}
+
 REQUIRED_WHEEL_FILES = {
     "arcshuttle/__init__.py",
     "arcshuttle/__main__.py",
@@ -36,6 +54,7 @@ REQUIRED_WHEEL_FILES = {
     "arcshuttle/docs/COMMAND_MANUAL.ja.md",
     f"{DIST_INFO}/METADATA",
     f"{DIST_INFO}/entry_points.txt",
+    f"{DIST_INFO}/licenses/LICENSE",
 }
 
 REQUIRED_SDIST_FILES = {
@@ -117,6 +136,29 @@ def inspect_wheel(wheel: Path) -> None:
             raise VerificationError(
                 f"unexpected wheel identity: {metadata['Name']} {metadata['Version']}"
             )
+        if metadata["Requires-Python"] != ">=3.11":
+            raise VerificationError(f"unexpected Python requirement: {metadata['Requires-Python']}")
+        if metadata["License-Expression"] != "MIT":
+            raise VerificationError(
+                f"unexpected license expression: {metadata['License-Expression']}"
+            )
+        if metadata.get_all("License-File", []) != ["LICENSE"]:
+            raise VerificationError(
+                f"unexpected license files: {metadata.get_all('License-File', [])}"
+            )
+        classifiers = set(metadata.get_all("Classifier", []))
+        if classifiers != EXPECTED_CLASSIFIERS:
+            raise VerificationError(f"unexpected classifiers: {sorted(classifiers)}")
+        project_urls = {}
+        for value in metadata.get_all("Project-URL", []):
+            label, separator, url = value.partition(", ")
+            if not separator:
+                raise VerificationError(f"malformed project URL metadata: {value}")
+            if label in project_urls:
+                raise VerificationError(f"duplicate project URL label: {label}")
+            project_urls[label] = url
+        if project_urls != EXPECTED_PROJECT_URLS:
+            raise VerificationError(f"unexpected project URLs: {project_urls}")
         runtime_dependencies = metadata.get_all("Requires-Dist", [])
         if runtime_dependencies:
             raise VerificationError(

@@ -8,15 +8,26 @@ dynamic = ["version"]
 description = "Resource-aware parallel archive creation and extraction with 7-Zip"
 readme = "README.md"
 requires-python = ">=3.11"
-license = { file = "LICENSE" }
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [{ name = "ArcShuttle contributors" }]
 dependencies = []
 classifiers = [
-  "Programming Language :: Python :: 3",
-  "Programming Language :: Python :: 3.11",
+  "Environment :: Console",
   "Operating System :: Microsoft :: Windows",
   "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: System :: Archiving :: Compression",
 ]
+
+[project.urls]
+Documentation = "https://github.com/bohemon/ArcShuttle/blob/main/docs/COMMAND_MANUAL.en.md"
+Issues = "https://github.com/bohemon/ArcShuttle/issues"
+"Release notes" = "https://github.com/bohemon/ArcShuttle/releases"
+Source = "https://github.com/bohemon/ArcShuttle"
 
 [project.scripts]
 arcshuttle = "arcshuttle.cli:main"
