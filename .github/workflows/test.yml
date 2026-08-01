@@ -29,6 +29,9 @@ jobs:
       - run: hatch run format-check
       - run: hatch run test
       - run: hatch build
+      - name: Build PowerShell Release assets
+        if: matrix.python-version == '3.12'
+        run: hatch run powershell-assets
       - name: Verify clean wheel installation
         if: matrix.python-version == '3.12'
         run: hatch run verify-release --skip-build
@@ -36,9 +39,11 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          Import-Module ./powershell/ArcShuttle.psm1 -Force
+          Test-ModuleManifest ./powershell/ArcShuttle.psd1
+          Import-Module ./powershell/ArcShuttle.psd1 -Force
           Get-Command Invoke-ArcShuttleExtractPlan, Invoke-ArcShuttleCreatePlan, Invoke-ArcShuttleRun, Invoke-ArcShuttleExtract, Invoke-ArcShuttleCreate
-          Import-Module ./powershell/Parxtract.psm1 -Force
+          Test-ModuleManifest ./powershell/Parxtract.psd1
+          Import-Module ./powershell/Parxtract.psd1 -Force
           Get-Command Invoke-ParxtractPlan, Invoke-ParxtractRun, Invoke-Parxtract
 
   required:

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import configparser
+import hashlib
 import os
 import shutil
 import subprocess
@@ -21,6 +22,8 @@ VERSION = "0.2.0"
 WHEEL_NAME = f"arcshuttle-{VERSION}-py3-none-any.whl"
 SDIST_NAME = f"arcshuttle-{VERSION}.tar.gz"
 DIST_INFO = f"arcshuttle-{VERSION}.dist-info"
+POWERSHELL_ASSET_NAME = f"ArcShuttle-PowerShell-{VERSION}.zip"
+POWERSHELL_CHECKSUM_NAME = f"{POWERSHELL_ASSET_NAME}.sha256"
 
 EXPECTED_CLASSIFIERS = {
     "Environment :: Console",
@@ -49,7 +52,9 @@ REQUIRED_WHEEL_FILES = {
     "parxtract/__init__.py",
     "parxtract/__main__.py",
     "arcshuttle/powershell/ArcShuttle.psm1",
+    "arcshuttle/powershell/ArcShuttle.psd1",
     "arcshuttle/powershell/Parxtract.psm1",
+    "arcshuttle/powershell/Parxtract.psd1",
     "arcshuttle/docs/COMMAND_MANUAL.en.md",
     "arcshuttle/docs/COMMAND_MANUAL.ja.md",
     f"{DIST_INFO}/METADATA",
@@ -63,10 +68,22 @@ REQUIRED_SDIST_FILES = {
     f"arcshuttle-{VERSION}/src/arcshuttle/__init__.py",
     f"arcshuttle-{VERSION}/src/parxtract/__init__.py",
     f"arcshuttle-{VERSION}/powershell/ArcShuttle.psm1",
+    f"arcshuttle-{VERSION}/powershell/ArcShuttle.psd1",
     f"arcshuttle-{VERSION}/powershell/Parxtract.psm1",
+    f"arcshuttle-{VERSION}/powershell/Parxtract.psd1",
     f"arcshuttle-{VERSION}/docs/COMMAND_MANUAL.en.md",
     f"arcshuttle-{VERSION}/docs/COMMAND_MANUAL.ja.md",
     f"arcshuttle-{VERSION}/scripts/verify_release.py",
+    f"arcshuttle-{VERSION}/scripts/build_powershell_assets.py",
+}
+
+REQUIRED_POWERSHELL_ASSET_FILES = {
+    f"ArcShuttle/{VERSION}/ArcShuttle.psd1",
+    f"ArcShuttle/{VERSION}/ArcShuttle.psm1",
+    f"ArcShuttle/{VERSION}/LICENSE",
+    f"Parxtract/{VERSION}/Parxtract.psd1",
+    f"Parxtract/{VERSION}/Parxtract.psm1",
+    f"Parxtract/{VERSION}/LICENSE",
 }
 
 
@@ -97,12 +114,17 @@ def checked_run(command: list[str], *, cwd: Path = ROOT) -> subprocess.Completed
 
 
 def build_artifacts() -> None:
-    """Build the wheel and source distribution through Hatch."""
+    """Build Python and PowerShell distribution artifacts."""
 
     hatch = shutil.which("hatch")
     if hatch is None:
         raise VerificationError("hatch is not installed or not available on PATH")
     completed = checked_run([hatch, "build"])
+    if completed.stdout.strip():
+        print(completed.stdout.strip())
+    if completed.stderr.strip():
+        print(completed.stderr.strip(), file=sys.stderr)
+    completed = checked_run([sys.executable, str(ROOT / "scripts/build_powershell_assets.py")])
     if completed.stdout.strip():
         print(completed.stdout.strip())
     if completed.stderr.strip():
@@ -184,6 +206,43 @@ def inspect_sdist(sdist: Path) -> None:
     require_files(members, REQUIRED_SDIST_FILES, sdist)
 
 
+def normalized_text(path: Path) -> bytes:
+    """Return source text in the normalized form stored in the PowerShell asset."""
+
+    text = path.read_text(encoding="utf-8")
+    return text.replace("\r\n", "\n").replace("\r", "\n").encode("utf-8")
+
+
+def inspect_powershell_asset(asset: Path, checksum: Path) -> None:
+    """Validate the versioned module layout, contents, and checksum."""
+
+    digest = hashlib.sha256(asset.read_bytes()).hexdigest()
+    expected_checksum = f"{digest}  {asset.name}\n"
+    if checksum.read_text(encoding="ascii") != expected_checksum:
+        raise VerificationError(f"unexpected PowerShell checksum file: {checksum}")
+
+    with zipfile.ZipFile(asset) as archive:
+        members = set(archive.namelist())
+        if members != REQUIRED_POWERSHELL_ASSET_FILES:
+            raise VerificationError(f"unexpected PowerShell asset members: {sorted(members)}")
+        expected_sources = {
+            f"ArcShuttle/{VERSION}/ArcShuttle.psd1": ROOT / "powershell/ArcShuttle.psd1",
+            f"ArcShuttle/{VERSION}/ArcShuttle.psm1": ROOT / "powershell/ArcShuttle.psm1",
+            f"Parxtract/{VERSION}/Parxtract.psd1": ROOT / "powershell/Parxtract.psd1",
+            f"Parxtract/{VERSION}/Parxtract.psm1": ROOT / "powershell/Parxtract.psm1",
+        }
+        for member, source in expected_sources.items():
+            if archive.read(member) != normalized_text(source):
+                raise VerificationError(f"PowerShell asset content differs from source: {member}")
+        license_content = normalized_text(ROOT / "LICENSE")
+        for member in (
+            f"ArcShuttle/{VERSION}/LICENSE",
+            f"Parxtract/{VERSION}/LICENSE",
+        ):
+            if archive.read(member) != license_content:
+                raise VerificationError(f"PowerShell asset license differs from source: {member}")
+
+
 def installed_command(environment: Path, name: str) -> Path:
     """Return an installed console-script path for the current platform."""
 
@@ -248,18 +307,21 @@ def main(argv: list[str] | None = None) -> int:
             build_artifacts()
         wheel = DIST / WHEEL_NAME
         sdist = DIST / SDIST_NAME
-        for artifact in (wheel, sdist):
+        powershell_asset = DIST / POWERSHELL_ASSET_NAME
+        powershell_checksum = DIST / POWERSHELL_CHECKSUM_NAME
+        for artifact in (wheel, sdist, powershell_asset, powershell_checksum):
             if not artifact.is_file():
                 raise VerificationError(f"release artifact is missing: {artifact}")
         inspect_wheel(wheel)
         inspect_sdist(sdist)
+        inspect_powershell_asset(powershell_asset, powershell_checksum)
         smoke_installed_wheel(wheel)
     except (OSError, VerificationError, zipfile.BadZipFile, tarfile.TarError) as exc:
         print(f"release verification failed: {exc}", file=sys.stderr)
         return 1
     print(
-        "release verification passed: artifacts, dependency metadata, console scripts, "
-        "and clean-wheel smoke tests"
+        "release verification passed: Python and PowerShell artifacts, dependency metadata, "
+        "console scripts, and clean-wheel smoke tests"
     )
     return 0
 

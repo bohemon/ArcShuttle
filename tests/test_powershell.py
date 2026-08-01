@@ -30,6 +30,53 @@ def run_script(tmp_path: Path, source: str) -> subprocess.CompletedProcess[str]:
     )
 
 
+@pytest.mark.parametrize(
+    ("module_name", "expected_exports"),
+    (
+        (
+            "ArcShuttle",
+            {
+                "Invoke-ArcShuttleCreate",
+                "Invoke-ArcShuttleCreatePlan",
+                "Invoke-ArcShuttleExtract",
+                "Invoke-ArcShuttleExtractPlan",
+                "Invoke-ArcShuttleRun",
+            },
+        ),
+        (
+            "Parxtract",
+            {"Invoke-Parxtract", "Invoke-ParxtractPlan", "Invoke-ParxtractRun"},
+        ),
+    ),
+)
+def test_module_manifest_metadata_and_exports(
+    tmp_path: Path,
+    module_name: str,
+    expected_exports: set[str],
+) -> None:
+    manifest = ROOT / "powershell" / f"{module_name}.psd1"
+    script = f"""
+$manifest = Test-ModuleManifest -Path {ps_quote(manifest)}
+[pscustomobject]@{{
+    name = $manifest.Name
+    version = $manifest.Version.ToString()
+    powershell_version = $manifest.PowerShellVersion.ToString()
+    compatible_editions = @($manifest.CompatiblePSEditions)
+    exports = @($manifest.ExportedFunctions.Keys)
+}} | ConvertTo-Json -Compress -Depth 100
+"""
+
+    completed = run_script(tmp_path, script)
+
+    assert completed.returncode == 0, completed.stderr
+    result = json.loads(completed.stdout)
+    assert result["name"] == module_name
+    assert result["version"] == "0.2.0"
+    assert result["powershell_version"] == "7.0"
+    assert result["compatible_editions"] == ["Core"]
+    assert set(result["exports"]) == expected_exports
+
+
 FAKE_ARCSHUTTLE = r"""
 function global:Invoke-FakeArcShuttle {
     $cliArgs = @($args)

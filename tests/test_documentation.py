@@ -119,7 +119,9 @@ def test_bilingual_manuals_and_powershell_modules_are_packaged() -> None:
     included = project["tool"]["hatch"]["build"]["targets"]["wheel"]["force-include"]
 
     assert included == {
+        "powershell/ArcShuttle.psd1": "arcshuttle/powershell/ArcShuttle.psd1",
         "powershell/ArcShuttle.psm1": "arcshuttle/powershell/ArcShuttle.psm1",
+        "powershell/Parxtract.psd1": "arcshuttle/powershell/Parxtract.psd1",
         "powershell/Parxtract.psm1": "arcshuttle/powershell/Parxtract.psm1",
         "docs/COMMAND_MANUAL.en.md": "arcshuttle/docs/COMMAND_MANUAL.en.md",
         "docs/COMMAND_MANUAL.ja.md": "arcshuttle/docs/COMMAND_MANUAL.ja.md",

@@ -51,7 +51,9 @@ include = [
 packages = ["src/arcshuttle", "src/parxtract"]
 
 [tool.hatch.build.targets.wheel.force-include]
+"powershell/ArcShuttle.psd1" = "arcshuttle/powershell/ArcShuttle.psd1"
 "powershell/ArcShuttle.psm1" = "arcshuttle/powershell/ArcShuttle.psm1"
+"powershell/Parxtract.psd1" = "arcshuttle/powershell/Parxtract.psd1"
 "powershell/Parxtract.psm1" = "arcshuttle/powershell/Parxtract.psm1"
 "docs/COMMAND_MANUAL.en.md" = "arcshuttle/docs/COMMAND_MANUAL.en.md"
 "docs/COMMAND_MANUAL.ja.md" = "arcshuttle/docs/COMMAND_MANUAL.ja.md"
@@ -69,6 +71,7 @@ test-verbose = "pytest -vv {args:tests}"
 lint = "ruff check {args:.}"
 format = "ruff check --fix {args:.} && ruff format {args:.}"
 format-check = "ruff format --check {args:.}"
+powershell-assets = "python scripts/build_powershell_assets.py {args}"
 verify-release = "python scripts/verify_release.py {args}"
 check = [
   "ruff check .",
