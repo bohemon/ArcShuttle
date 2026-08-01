@@ -15,6 +15,10 @@ MANUALS = (
     ROOT / "docs" / "COMMAND_MANUAL.en.md",
     ROOT / "docs" / "COMMAND_MANUAL.ja.md",
 )
+INSTALLATION_GUIDES = (
+    ROOT / "docs" / "INSTALLATION.en.md",
+    ROOT / "docs" / "INSTALLATION.ja.md",
+)
 
 
 @pytest.mark.parametrize("manual", MANUALS, ids=("en", "ja"))
@@ -58,6 +62,33 @@ def test_readme_links_to_packaged_manuals() -> None:
         relative_path = manual.relative_to(ROOT).as_posix()
         assert relative_path in readme
         assert manual.is_file()
+
+    for guide in INSTALLATION_GUIDES:
+        relative_path = guide.relative_to(ROOT).as_posix()
+        assert relative_path in readme
+        assert guide.is_file()
+
+
+@pytest.mark.parametrize("guide", INSTALLATION_GUIDES, ids=("en", "ja"))
+def test_installation_guides_cover_clone_free_and_verified_installation(guide: Path) -> None:
+    text = guide.read_text(encoding="utf-8")
+    required_terms = (
+        "pipx install",
+        "python -m pip install",
+        "--upgrade",
+        "python -m pip uninstall arcshuttle",
+        "arcshuttle-0.2.0-py3-none-any.whl",
+        "git+https://github.com/bohemon/ArcShuttle.git@v0.2.0",
+        "ArcShuttle-PowerShell-$version.zip",
+        '$checksumFile = "$archive.sha256"',
+        "Get-FileHash",
+        "Expand-Archive",
+        "Test-ModuleManifest",
+        "Import-Module ArcShuttle",
+        "Import-Module Parxtract",
+        "Invoke-Expression",
+    )
+    assert [term for term in required_terms if term not in text] == []
 
 
 @pytest.mark.parametrize("manual", MANUALS, ids=("en", "ja"))
@@ -125,4 +156,6 @@ def test_bilingual_manuals_and_powershell_modules_are_packaged() -> None:
         "powershell/Parxtract.psm1": "arcshuttle/powershell/Parxtract.psm1",
         "docs/COMMAND_MANUAL.en.md": "arcshuttle/docs/COMMAND_MANUAL.en.md",
         "docs/COMMAND_MANUAL.ja.md": "arcshuttle/docs/COMMAND_MANUAL.ja.md",
+        "docs/INSTALLATION.en.md": "arcshuttle/docs/INSTALLATION.en.md",
+        "docs/INSTALLATION.ja.md": "arcshuttle/docs/INSTALLATION.ja.md",
     }

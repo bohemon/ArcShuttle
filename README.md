@@ -4,7 +4,7 @@ ArcShuttle is a resource-aware command-line tool for creating, extracting, and v
 
 It runs on Windows and Linux with Python 3.11+, gives all jobs one shared CPU/process/I/O budget, and publishes outputs only after safe staging. Standard output is reserved for UTF-8 JSON Lines; diagnostics and progress go to standard error.
 
-The normative human/AI references are the [English command manual](docs/COMMAND_MANUAL.en.md) and [日本語コマンドマニュアル](docs/COMMAND_MANUAL.ja.md).
+The normative human/AI references are the [English command manual](docs/COMMAND_MANUAL.en.md) and [日本語コマンドマニュアル](docs/COMMAND_MANUAL.ja.md). For installation choices, see the [English installation guide](docs/INSTALLATION.en.md) or [日本語インストールガイド](docs/INSTALLATION.ja.md).
 
 ## Install and verify
 
@@ -14,23 +14,27 @@ Requirements:
 - a current `7zz`, `7z`, or `7za` command
 - PowerShell 7 only for the optional object-pipeline modules
 
-For development, Hatch owns the environment:
+For an isolated end-user CLI installation, install the verified v0.2.0 Release wheel with
+[`pipx`](https://pipx.pypa.io/):
 
 ```sh
-python -m pip install hatch
-hatch run arcshuttle --version
-hatch run check
-```
-
-For a local CLI installation:
-
-```sh
-python -m pip install .
+pipx install "https://github.com/bohemon/ArcShuttle/releases/download/v0.2.0/arcshuttle-0.2.0-py3-none-any.whl"
 arcshuttle --version
 parxtract --version
 ```
 
+In an existing virtual environment, use the same wheel without cloning the repository:
+
+```sh
+python -m pip install "https://github.com/bohemon/ArcShuttle/releases/download/v0.2.0/arcshuttle-0.2.0-py3-none-any.whl"
+arcshuttle --version
+```
+
 `arcshuttle` is the primary 0.2.0 CLI. `parxtract` remains a compatibility alias for the 0.1 extraction syntax and schema-v1 planning.
+
+The optional PowerShell modules have a separate verified Release zip. The installation guides
+cover SHA-256 verification and CurrentUser installation. Do not pipe a downloaded script into
+`Invoke-Expression`.
 
 ## Quick start
 
@@ -135,7 +139,7 @@ See the manuals' migration sections for exact command, environment, TOML, and ma
 ## PowerShell 7
 
 ```powershell
-Import-Module ./powershell/ArcShuttle.psm1
+Import-Module ArcShuttle
 
 Get-ChildItem C:\Data -Directory |
     Invoke-ArcShuttleCreatePlan -Format 7z -Level 5 |
@@ -144,11 +148,16 @@ Get-ChildItem C:\Data -Directory |
 
 The module exports `Invoke-ArcShuttleExtractPlan`, `Invoke-ArcShuttleCreatePlan`, `Invoke-ArcShuttleRun`, `Invoke-ArcShuttleExtract`, and `Invoke-ArcShuttleCreate`. It uses BOM-free UTF-8 temporary files, converts JSON Lines to objects, replays stderr, preserves `$LASTEXITCODE`, and removes temporary files in `finally`.
 
-`powershell/Parxtract.psm1` and its three `Invoke-Parxtract*` functions remain available for compatibility.
+The Release asset also installs the `Parxtract` compatibility module and its three `Invoke-Parxtract*` functions. See the [installation guides](docs/INSTALLATION.en.md) for the checksum-verified setup.
 
 ## Development and dependency policy
 
+Clone the repository only for development, then let Hatch own the environment:
+
 ```sh
+git clone https://github.com/bohemon/ArcShuttle.git
+cd ArcShuttle
+python -m pip install hatch
 hatch run test
 hatch run lint
 hatch run format-check
