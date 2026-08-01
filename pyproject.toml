@@ -57,6 +57,8 @@ packages = ["src/arcshuttle", "src/parxtract"]
 "powershell/Parxtract.psm1" = "arcshuttle/powershell/Parxtract.psm1"
 "docs/COMMAND_MANUAL.en.md" = "arcshuttle/docs/COMMAND_MANUAL.en.md"
 "docs/COMMAND_MANUAL.ja.md" = "arcshuttle/docs/COMMAND_MANUAL.ja.md"
+"docs/INSTALLATION.en.md" = "arcshuttle/docs/INSTALLATION.en.md"
+"docs/INSTALLATION.ja.md" = "arcshuttle/docs/INSTALLATION.ja.md"
 
 [tool.hatch.envs.default]
 dependencies = [

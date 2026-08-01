@@ -57,6 +57,8 @@ REQUIRED_WHEEL_FILES = {
     "arcshuttle/powershell/Parxtract.psd1",
     "arcshuttle/docs/COMMAND_MANUAL.en.md",
     "arcshuttle/docs/COMMAND_MANUAL.ja.md",
+    "arcshuttle/docs/INSTALLATION.en.md",
+    "arcshuttle/docs/INSTALLATION.ja.md",
     f"{DIST_INFO}/METADATA",
     f"{DIST_INFO}/entry_points.txt",
     f"{DIST_INFO}/licenses/LICENSE",
@@ -73,6 +75,8 @@ REQUIRED_SDIST_FILES = {
     f"arcshuttle-{VERSION}/powershell/Parxtract.psd1",
     f"arcshuttle-{VERSION}/docs/COMMAND_MANUAL.en.md",
     f"arcshuttle-{VERSION}/docs/COMMAND_MANUAL.ja.md",
+    f"arcshuttle-{VERSION}/docs/INSTALLATION.en.md",
+    f"arcshuttle-{VERSION}/docs/INSTALLATION.ja.md",
     f"arcshuttle-{VERSION}/scripts/verify_release.py",
     f"arcshuttle-{VERSION}/scripts/build_powershell_assets.py",
 }
