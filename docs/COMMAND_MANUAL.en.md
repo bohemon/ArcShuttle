@@ -123,7 +123,7 @@ Size values are nonnegative integers with optional binary suffixes `K`, `M`, `G`
 
 ## 5. Creation contract
 
-Creation v1 makes exactly one archive per input source. It does not combine several inputs into one archive. A future multi-source manifest may add that capability explicitly.
+Creation makes exactly one independent archive per input source. It does not combine several inputs into one archive.
 
 | Source | Default destination | Stored archive root |
 |---|---|---|
@@ -132,20 +132,19 @@ Creation v1 makes exactly one archive per input source. It does not combine seve
 
 `--output-dir DIR` places each default archive name directly below `DIR`. `--format zip` changes the suffix to `.zip`. Levels are 0–9; the planned methods are LZMA2 for 7z and Deflate for zip. Level 0 tells 7-Zip to store rather than compress. Arbitrary raw 7-Zip options are not accepted.
 
-Planning recursively inventories normalized relative paths, entry kind, regular-file size, and nanosecond mtime. It records total regular-file size, file count, directory count, latest mtime, a deterministic digest, and a source identity. Immediately before execution, the source is inventoried again. An identity change fails by default; `--allow-changed` permits metadata/content-set changes with a warning, but never permits a source-kind change or non-regular entry.
+Planning records a deterministic inventory and source identity, then inventories the source again immediately before execution. An identity change fails by default; `--allow-changed` permits safe metadata or content-set changes with a warning, but never permits a source-kind change or non-regular entry.
 
 The destination, staging directory, and log root must not be inside a directory source. The check uses normalized/resolved path relationships, not name-based exclusions.
 
 Create scheduling:
 
-| Rule | Profile | CPU tokens and threads | Reason |
-|---|---|---:|---|
-| size below `small_threshold` | `small` | 1 | `create-below-small-threshold` |
-| level 0 and not small | `heavy-serial` | 1 | `create-store-mode` |
-| other 7z | `heavy-scalable` | `min(heavy_threads,cpu_budget)` | `create-7z-lzma2` |
-| other zip | `heavy-scalable` | `min(heavy_threads,cpu_budget)` | `create-zip-deflate` |
+| Rule | Profile | CPU tokens and threads |
+|---|---|---:|
+| size below `small_threshold` | `small` | 1 |
+| level 0 and not small | `heavy-serial` | 1 |
+| other 7z or zip creation | `heavy-scalable` | `min(heavy_threads,cpu_budget)` |
 
-CPU tokens and `-mmt=N` do not strictly bound memory. LZMA2 memory use also depends on dictionary and method settings. ArcShuttle 0.3.1 has no memory-token or dynamic-memory controller.
+CPU tokens and `-mmt=N` do not strictly bound memory; LZMA2 memory use also depends on dictionary and method settings.
 
 ## 6. Extraction contract
 
@@ -179,23 +178,12 @@ sevenzip = "/opt/7zip/7zz"
 output_dir = "/data/out"
 existing = "rename"
 cpu_budget = 8
-max_processes = 4
-storage_profile = "ssd"
-io_slots = 2
-heavy_threads = 4
-small_threshold = "64M"
-inspect_threshold = "64M"
-inspect_timeout = 30
-reservation_delay = 30
-sequential_if_total_below = 0
-log_dir = "/data/logs"
-quiet = false
-fail_fast = false
-allow_changed = false
-on_input_error = "fail"
+storage_profile = "auto"
 create_format = "7z"
 compression_level = 5
 ```
+
+The following table lists every supported configuration key and environment-variable alias; omitted keys use the defaults in section 4.
 
 | TOML key | New environment | Legacy environment |
 |---|---|---|
@@ -234,11 +222,9 @@ running_jobs     <= max_processes
 sum(io_tokens)  <= io_slots
 ```
 
-Order is priority descending, profile rank (`heavy-scalable`, `heavy-serial`, `small`), estimated weight descending, then plan index. A fitting later job may backfill while the head cannot fit. Once the head waits `reservation_delay`, new backfill stops until it can run.
+Scheduling considers priority, profile, estimated weight, and plan index. A fitting later job may use otherwise idle capacity, but `reservation_delay` eventually reserves resources for the queue head to prevent starvation.
 
-With `storage_profile = "auto"` and no explicit `--io-slots`, `run`, `extract`, and `create` inspect every validated source and destination immediately before execution. The capacity map is HDD = 1, SSD = 2, NVMe = 4, and unknown = 2 I/O slots. ArcShuttle deduplicates paths on the same device, uses the lowest capacity among all endpoints, and caps the result at `max_processes`. Unsupported storage, unavailable metadata, permission failure, and any other detection failure use the unknown two-slot fallback; they do not prevent execution. The effective value and reason are diagnostic output on stderr unless `--quiet` is set.
-
-Standalone `plan` never probes storage and does not persist a hardware-specific budget in the manifest. This keeps one plan portable to another machine; resolution belongs to the process that executes it. An explicit `--io-slots` setting has highest precedence and bypasses detection. An explicitly configured `--storage-profile hdd`, `ssd`, or `nvme` also bypasses detection and supplies its fixed profile default. The same precedence applies whether the value comes from CLI, environment, or TOML configuration.
+With `storage_profile = "auto"` and no explicit `--io-slots`, `run`, `extract`, and `create` inspect the validated source and destination devices immediately before execution. The capacity map is HDD = 1, SSD = 2, NVMe = 4, and unknown = 2 I/O slots; the slowest distinct device wins and `max_processes` remains the upper bound. Detection failures use the unknown fallback without preventing execution. Standalone `plan` does not probe storage, so manifests remain portable. An explicit `--io-slots` value takes precedence, while an explicit `hdd`, `ssd`, or `nvme` profile uses its fixed default. The effective value and reason are written to stderr unless `--quiet` is set.
 
 `--fail-fast` stops new starts after a failed result, lets already running jobs finish, and reports unstarted jobs as skipped. Interruption stops new starts, signals managed child process groups, waits/terminates them safely, and reports interruption. The final v2 result order is deterministic plan order, not completion order.
 
@@ -318,15 +304,11 @@ Extraction creates `.arcshuttle-<job-id>-<random>.tmp` beside the final director
 
 Creation performs this order:
 
-1. reject unsafe source/destination/log relationships;
-2. re-inventory and compare source identity;
-3. resolve `--existing` without overwriting;
-4. create a private, ownership-marked sibling staging directory;
-5. run `7z a` with a controlled working directory, relative source argument, closed stdin, argument array, and `shell=False`;
-6. require create exit 0 and a regular staged archive;
-7. run `7z t` and require verification exit 0;
-8. recheck destination nonexistence and atomically publish without clobbering;
-9. remove only an owned empty staging directory.
+1. validate path relationships, source identity, and the non-destructive `--existing` policy;
+2. create a private, ownership-marked staging directory beside the destination;
+3. run `7z a` through an argument array with `shell=False`, closed stdin, and a controlled working directory;
+4. require a regular staged archive and successful `7z t` verification;
+5. recheck that the destination is absent, publish atomically, and remove only an owned empty staging directory.
 
 Any create/test warning, failure, interruption, or pre-commit problem retains staging as `.failed`. Source paths are never moved, modified, or deleted.
 
@@ -373,7 +355,7 @@ Get-ChildItem C:\Archives -File |
 
 PowerShell parameters map by name: `-ArcShuttleCommand`, `-SevenZip`/`-7z`, `-OutputDir`, `-Existing`, `-CpuBudget`, `-MaxProcesses`, `-StorageProfile`, `-IoSlots`, `-HeavyThreads`, `-SmallThreshold`, `-InspectThreshold`, `-InspectTimeout`, `-ReservationDelay`, `-SequentialIfTotalBelow`, `-LogDir`, `-Config`, `-OnInputError`, `-Quiet`, `-FailFast`, and `-AllowChanged`. Create plan/combined functions also accept `-Format` and `-Level`.
 
-The module writes BOM-free UTF-8 NUL input or JSON Lines to temporary files, converts native CLI stdout with `ConvertFrom-Json`, emits only `PSCustomObject` records on the PowerShell success stream, preserves `$LASTEXITCODE`, and removes temporary files in `finally`. Progress and diagnostics from the native CLI are forwarded on stderr in real time while the command is running; they are not buffered and replayed after exit. `-Quiet` asks the core CLI to suppress supported progress, version, and automatic-I/O-selection diagnostics, but warnings and errors still use stderr.
+The module emits only `PSCustomObject` records on the PowerShell success stream, preserves `$LASTEXITCODE`, and cleans up its temporary files. Native CLI progress and diagnostics are forwarded on stderr in real time. `-Quiet` suppresses supported informational diagnostics, but warnings and errors remain on stderr.
 
 Keep the streams separate for a pure object pipeline. An explicit `2>&1` redirects PowerShell's error stream into its success stream, so diagnostic `ErrorRecord` values and `PSCustomObject` success records are then intentionally mixed:
 
@@ -387,12 +369,13 @@ Get-ChildItem C:\Archives -File |
 
 ### 11.1 Output contracts and persistence
 
-The native CLI and PowerShell module expose intentionally different surfaces:
+Choose persistence by the output surface:
 
 | Surface | Success output | Primary use |
 |---|---|---|
-| `arcshuttle plan` / `parxtract plan` | canonical UTF-8 JSON Lines | portable manifests, durable storage, concatenation, and non-PowerShell tools |
-| `Invoke-ArcShuttle*Plan` / `Invoke-ParxtractPlan` | `PSCustomObject` records | PowerShell inspection, editing, variables, and object pipelines |
+| `arcshuttle plan` / `parxtract plan` | canonical UTF-8 JSON Lines | portable manifest files and non-PowerShell tools |
+| `Invoke-ArcShuttle*Plan` / `Invoke-ParxtractPlan` | `PSCustomObject` records | in-session PowerShell object pipelines |
+| `Export-Clixml` / `Import-Clixml` | PowerShell object snapshots | PowerShell-only persistence across sessions |
 
 Keep plans as objects when planning and running in one PowerShell session:
 
@@ -406,70 +389,37 @@ $plans | Select-Object plan_index, operation, source, destination
 $plans | Invoke-ArcShuttleRun
 ```
 
-A filename extension does not select a serializer. These commands invoke PowerShell display formatting and **do not** create manifests:
+A filename extension does not select a serializer. Redirecting a plan object invokes PowerShell display formatting and **does not** create a manifest:
 
 ```powershell
 # Invalid persistence: the files contain lossy display formatting, not JSON Lines.
 Get-ChildItem C:\Archives -File |
     Invoke-ArcShuttleExtractPlan > extract.jsonl
-Get-ChildItem C:\Sources -Directory |
-    Invoke-ArcShuttleCreatePlan > create.jsonl
-Get-ChildItem C:\Archives -File |
-    Invoke-ParxtractPlan > legacy.jsonl
 ```
 
-Text such as `name : value`, `@{...}`, or `System.Object[]` cannot be safely reconstructed. Do not pass such a file to `run` and do not attempt to repair it; re-plan from the sources.
+Do not pass such a file to `run` or attempt to repair it; re-plan from the sources.
 
 Use the native CLI from PowerShell when canonical JSON Lines are required:
 
 ```powershell
-$archives = @(
-    Get-ChildItem C:\Archives -File |
-        Select-Object -ExpandProperty FullName
-)
-$sources = @(
-    Get-ChildItem C:\Sources |
-        Select-Object -ExpandProperty FullName
-)
-
+$archives = @(Get-ChildItem C:\Archives -File | Select-Object -ExpandProperty FullName)
 arcshuttle plan extract -- $archives > extract.jsonl
-arcshuttle plan create --format 7z -- $sources > create.jsonl
-parxtract plan -- $archives > legacy-extract.jsonl
-
 Get-Content -LiteralPath .\extract.jsonl |
     ConvertFrom-Json -Depth 100 |
     Select-Object plan_index, operation, source, destination
-
-arcshuttle run --manifest .\extract.jsonl > results.jsonl
 ```
 
-For path sets too large for a native command line, use the CLI's `--files0-from` input described in section 3.
+For path sets too large for a native command line, use `--files0-from` as described in section 3. Valid JSON Lines files may be concatenated as record streams. ArcShuttle validates the complete combined manifest, rejects duplicate `job_id` values and output collisions, and permits repeated `plan_index` values from independent plans. Do not renumber them because `plan_index` is protected by `integrity`.
 
-Valid JSON Lines manifests are record streams and may be combined without parsing them into PowerShell objects:
-
-```powershell
-Get-Content -LiteralPath .\extract-a.jsonl, .\extract-b.jsonl |
-    Set-Content -LiteralPath .\combined.jsonl -Encoding utf8NoBOM
-
-arcshuttle run --manifest .\combined.jsonl > results.jsonl
-```
-
-Every input file must already contain exactly one complete JSON object per nonblank physical line. ArcShuttle validates the complete combined manifest before starting any job. Duplicate `job_id` values and output collision are rejected. Independent plans may repeat `plan_index` values; do not renumber them because `plan_index` is protected by `integrity`.
-
-For a PowerShell-only snapshot across sessions, serialize the objects explicitly with CLIXML:
+For a PowerShell-only snapshot across sessions, use CLIXML explicitly:
 
 ```powershell
-$planA | Export-Clixml -LiteralPath .\plan-a.clixml -Depth 100
-$planB | Export-Clixml -LiteralPath .\plan-b.clixml -Depth 100
-
-$plans = @(
-    Import-Clixml -LiteralPath .\plan-a.clixml
-    Import-Clixml -LiteralPath .\plan-b.clixml
-)
+$plans | Export-Clixml -LiteralPath .\plans.clixml -Depth 100
+$plans = @(Import-Clixml -LiteralPath .\plans.clixml)
 $plans | Invoke-ArcShuttleRun
 ```
 
-The same pattern works with `Invoke-ParxtractPlan` and `Invoke-ParxtractRun`. CLIXML is a PowerShell object snapshot, not an ArcShuttle manifest: `arcshuttle run --manifest` does not accept it, and complete CLIXML documents cannot be concatenated as raw text. Import each snapshot and combine the resulting object lists instead. Deserialized objects preserve the manifest data properties needed by the run commands but are snapshots rather than live objects with their original methods.
+The same pattern works with `Invoke-ParxtractPlan` and `Invoke-ParxtractRun`. CLIXML is not an ArcShuttle manifest and is not accepted by `arcshuttle run --manifest`. To combine snapshots, import them and combine the resulting object lists rather than concatenating raw CLIXML documents.
 
 ## 12. POSIX examples
 
@@ -489,29 +439,18 @@ Use `set -o pipefail` when shell pipeline status matters, but remember that plan
 
 ## 13. Migration from parxtract 0.1
 
-- Install distribution `arcshuttle`; both console scripts are included.
-- Replace `parxtract plan ...` with `arcshuttle plan extract ...` for schema-v2 output.
-- Replace `parxtract extract ...` with `arcshuttle extract ...` when ready; the compatibility command remains functional.
-- Existing schema-v1 manifests remain accepted and are converted internally to extract jobs.
-- New primary plans emit schema v2 with operation/source/destination identity and integrity.
-- Prefer `ARCSHUTTLE_*`; a new variable wins when both new and corresponding `PARXTRACT_*` are set.
-- Prefer `[arcshuttle]`; it overrides `[parxtract]` and root-level values.
-- Creation fields have no legacy environment/TOML aliases.
-- Existing `.parxtract` data is not migrated, renamed, claimed, or deleted. Review it manually; ArcShuttle writes new `.arcshuttle` names.
-- Import `ArcShuttle.psm1` for new PowerShell workflows; `Parxtract.psm1` remains compatible.
+- Install distribution `arcshuttle`, which includes both console scripts, and use `arcshuttle` for new CLI and PowerShell workflows.
+- Existing `parxtract` commands, the compatibility module, and schema-v1 manifests remain supported for extraction.
+- Prefer `ARCSHUTTLE_*` and `[arcshuttle]`; the new names take precedence, and creation settings have no legacy aliases.
+- Existing `.parxtract` data is not migrated, renamed, claimed, or deleted. ArcShuttle writes new `.arcshuttle` paths.
 
 ## 14. AI-agent procedure
 
-1. Verify `arcshuttle --version`, 7-Zip availability, operation, and desired format before planning.
-2. Use NUL input for generated/arbitrary paths. Do not assume implicit stdin.
-3. For creation, verify each requested source should produce its own archive and that output/log roots are outside directory sources.
-4. Capture stdout and stderr separately. Parse stdout as JSON Lines through EOF.
-5. Confirm every planned record is a `job` of the intended operation and all destinations are unique.
-6. If filtering, edit only the v2 allowlist. Never regenerate `integrity` or edit source/archive/inventory/I/O fields.
-7. Pass the complete stream to one `run` process so resource limits remain global.
-8. Read every result and the final summary. Combine statuses, warnings, and process exit for the final determination.
-9. Report non-null `staging_path` and `log_path`; do not delete retained output automatically.
-10. Never inject passwords/raw 7-Zip options, delete existing output, mutate sources, follow rejected links, or create an external overwrite workaround.
+1. Verify the version, 7-Zip availability, operation, output format, and safe destination before planning. Use NUL input for generated or arbitrary paths.
+2. Capture stdout and stderr separately. Validate every planned `job`, its operation, and destination uniqueness.
+3. If filtering, edit only the v2 allowlist. Never regenerate `integrity` or edit protected source, archive, inventory, or I/O fields.
+4. Pass the complete stream to one `run` process, read stdout through EOF, and evaluate every result plus the final summary and process exit.
+5. Report non-null `staging_path` and `log_path`. Do not delete retained output, modify sources, follow rejected links, or bypass overwrite protection.
 
 Machine decision outline:
 
@@ -528,11 +467,9 @@ else:
     else: outcome = success
 ```
 
-## 15. Dependencies, limits, and troubleshooting
+## 15. Limits and troubleshooting
 
-The installed package intentionally has zero third-party runtime dependencies. Standard-library implementations keep path, TOML, JSON, hashing, scheduling, and process safety auditable. Hatch development environments add `pytest`, `pytest-timeout`, and Ruff because their isolation, timeout, lint, and formatting behavior provides distinct test/CI value.
-
-Creation v1 supports only one source per archive, 7z/zip, levels 0–9, regular entries, and local non-split output. It has no multi-source archive, split creation, encrypted creation, password support, nested recursive processing, raw method tuning, runtime resource redistribution, disk auto-detection, memory budget, GUI, or watch service.
+Creation supports one source per archive, 7z/zip, levels 0–9, regular entries, and local non-split output. Multi-source, split, and encrypted creation, password input, raw method tuning, a strict memory budget, a GUI, and a watch service are not supported.
 
 | Symptom | Check | Safe response |
 |---|---|---|
