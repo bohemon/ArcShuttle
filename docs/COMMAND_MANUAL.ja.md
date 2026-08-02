@@ -365,13 +365,13 @@ Get-ChildItem C:\Archives -File |
     Invoke-ArcShuttleExtract -OutputDir C:\Extracted
 ```
 
-| 関数 | パイプライン入力 | 対応する*operation* |
+| 関数 | パイプライン入力 | 対応するCLI処理 |
 |---|---|---|
 | `Invoke-ArcShuttleExtractPlan` | 文字列または`FileSystemInfo` | `plan extract` |
 | `Invoke-ArcShuttleCreatePlan` | 文字列または`FileSystemInfo` | `plan create`。各項目は独立 |
 | `Invoke-ArcShuttleRun` | *job*オブジェクト | `run` |
-| `Invoke-ArcShuttleExtract` | 文字列または`FileSystemInfo` | `extract`の`plan`後に`run` |
-| `Invoke-ArcShuttleCreate` | 文字列または`FileSystemInfo` | `create`の`plan`後に`run` |
+| `Invoke-ArcShuttleExtract` | 文字列または`FileSystemInfo` | `plan extract`の後に`run` |
+| `Invoke-ArcShuttleCreate` | 文字列または`FileSystemInfo` | `plan create`の後に`run` |
 
 PowerShellでは、対応するパラメーターとして次の名前を使う：`-ArcShuttleCommand`、`-SevenZip`／`-7z`、`-OutputDir`、`-Existing`、`-CpuBudget`、`-MaxProcesses`、`-StorageProfile`、`-IoSlots`、`-HeavyThreads`、`-SmallThreshold`、`-InspectThreshold`、`-InspectTimeout`、`-ReservationDelay`、`-SequentialIfTotalBelow`、`-LogDir`、`-Config`、`-OnInputError`、`-Quiet`、`-FailFast`、`-AllowChanged`。`create`の*plan*関数と一括実行関数は、`-Format`と`-Level`も受け付ける。
 

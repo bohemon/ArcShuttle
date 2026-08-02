@@ -189,9 +189,19 @@ def test_command_manual_defines_powershell_output_and_persistence_contracts(
         "Invoke-ParxtractRun",
     )
     required_terms += (
-        ("display formatting", "output collision")
+        (
+            "display formatting",
+            "output collision",
+            "plan then run extraction",
+            "plan then run creation",
+        )
         if manual.name.endswith(".en.md")
-        else ("表示形式", "*destination*の衝突")
+        else (
+            "表示形式",
+            "*destination*の衝突",
+            "`plan extract`の後に`run`",
+            "`plan create`の後に`run`",
+        )
     )
     assert [term for term in required_terms if term not in text] == []
     duplicate_term = "duplicate" if manual.name.endswith(".en.md") else "重複"
