@@ -187,7 +187,8 @@ $records = @(
     @(
         [pscustomobject]@{{ operation = 'extract'; value = 'one' }}
         [pscustomobject]@{{ operation = 'create'; value = 'two' }}
-    ) | Invoke-ArcShuttleRun -ArcShuttleCommand Invoke-FakeArcShuttle -FailFast
+    ) | Invoke-ArcShuttleRun -ArcShuttleCommand Invoke-FakeArcShuttle `
+        -FailFast -StorageProfile auto
 )
 $savedExit = $LASTEXITCODE
 [pscustomobject]@{{
@@ -210,6 +211,8 @@ $savedExit = $LASTEXITCODE
     assert result["count"] == 2
     assert result["arguments"][:2] == ["run", "--manifest"]
     assert "--fail-fast" in result["arguments"]
+    profile_index = result["arguments"].index("--storage-profile")
+    assert result["arguments"][profile_index + 1] == "auto"
     assert result["has_bom"] is False
     assert result["temporary_exists"] is False
     assert result["exit_code"] == 9

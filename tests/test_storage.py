@@ -8,6 +8,7 @@ from arcshuttle.storage import (
     StorageClass,
     StorageDetector,
     StorageObservation,
+    observe_storage_paths,
     resolve_auto_io_slots,
     storage_class_capacity,
 )
@@ -92,3 +93,24 @@ def test_detector_protocol_accepts_a_callable() -> None:
 
     typed_detector: StorageDetector = detector
     assert typed_detector(Path("/tmp")).storage_class is StorageClass.SSD
+
+
+def test_path_observation_deduplicates_paths_and_contains_detector_failures() -> None:
+    calls: list[Path] = []
+
+    def detector(path: Path) -> StorageObservation:
+        calls.append(path)
+        if path.name == "bad":
+            raise PermissionError("fixture")
+        return StorageObservation(f"test:{path}", StorageClass.NVME, "fixture")
+
+    good = Path("/tmp/good")
+    bad = Path("/tmp/bad")
+    observations = observe_storage_paths([good, good, bad], detector)
+
+    assert calls == [good, bad]
+    assert [item.storage_class for item in observations] == [
+        StorageClass.NVME,
+        StorageClass.UNKNOWN,
+    ]
+    assert "PermissionError" in observations[1].reason

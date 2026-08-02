@@ -277,3 +277,6 @@ def test_v2_io_budget_is_rejected(tmp_path: Path) -> None:
 
     with pytest.raises(UsageError, match="I/O slots"):
         validate_manifest([job], Config(io_slots=1))
+
+    preflight = validate_manifest([job], Config(io_slots=1), enforce_io_budget=False)
+    assert preflight[0]["scheduling"]["io_tokens"] == 2

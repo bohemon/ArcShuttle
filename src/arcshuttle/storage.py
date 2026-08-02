@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import sys
 from collections.abc import Iterable
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 from typing import Protocol
+
+from .util import path_key
 
 
 class StorageClass(StrEnum):
@@ -110,3 +113,51 @@ def resolve_auto_io_slots(
     if slots < capacity:
         reason += f", capped by max_processes={max_processes}"
     return IoSlotResolution(slots, unique, bool(unknown_count), reason)
+
+
+def default_storage_detector() -> StorageDetector:
+    """Return the native detector for the current supported platform."""
+
+    if sys.platform == "win32":
+        from .storage_windows import WindowsStorageDetector
+
+        return WindowsStorageDetector()
+    if sys.platform.startswith("linux"):
+        from .storage_linux import LinuxStorageDetector
+
+        return LinuxStorageDetector()
+
+    platform = sys.platform
+
+    def unsupported(path: Path) -> StorageObservation:
+        return StorageObservation(
+            f"unsupported:{platform}:{path_key(path)}",
+            StorageClass.UNKNOWN,
+            f"storage detection is unsupported on platform {platform}",
+        )
+
+    return unsupported
+
+
+def observe_storage_paths(
+    paths: Iterable[Path], detector: StorageDetector
+) -> tuple[StorageObservation, ...]:
+    """Detect unique paths while converting detector failures into unknown observations."""
+
+    observations: list[StorageObservation] = []
+    seen: set[str] = set()
+    for path in paths:
+        key = path_key(path)
+        if key in seen:
+            continue
+        seen.add(key)
+        try:
+            observation = detector(path)
+        except Exception as exc:  # Detection is advisory and must never prevent execution.
+            observation = StorageObservation(
+                f"error:path:{key}",
+                StorageClass.UNKNOWN,
+                f"storage detection failed with {type(exc).__name__}",
+            )
+        observations.append(observation)
+    return tuple(observations)

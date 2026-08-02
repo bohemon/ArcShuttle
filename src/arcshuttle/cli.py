@@ -5,8 +5,9 @@ from __future__ import annotations
 import argparse
 import sys
 from collections.abc import Sequence
+from dataclasses import replace
 from pathlib import Path
-from typing import TextIO
+from typing import Any, TextIO
 
 from .config import Config, resolve_config
 from .input import collect_paths, normalize_paths
@@ -20,6 +21,12 @@ from .operations.extract import (
 )
 from .runner import execute_manifest
 from .sevenzip import SevenZip, find_executable
+from .storage import (
+    StorageDetector,
+    default_storage_detector,
+    observe_storage_paths,
+    resolve_auto_io_slots,
+)
 from .util import UsageError, emit_jsonl, read_json_lines
 
 
@@ -170,8 +177,42 @@ def _plan_create(args: argparse.Namespace, config: Config) -> tuple[PlanningResu
     return result, True
 
 
+def _prepare_runtime_jobs(
+    records: list[dict[str, Any]],
+    config: Config,
+    *,
+    program_name: str,
+    detector: StorageDetector | None,
+) -> tuple[list[dict[str, Any]], Config]:
+    if not config.uses_auto_io_slots:
+        return validate_manifest(records, config), config
+
+    # Complete structural, integrity, and collision preflight before probing any supplied path.
+    preflight = validate_manifest(records, config, enforce_io_budget=False)
+    paths = [
+        Path(path)
+        for job in preflight
+        for path in (job["source"]["path"], job["destination"]["path"])
+    ]
+    active_detector = default_storage_detector() if detector is None else detector
+    observations = observe_storage_paths(paths, active_detector)
+    resolution = resolve_auto_io_slots(observations, max_processes=config.max_processes)
+    effective = replace(config, io_slots=resolution.slots)
+    jobs = validate_manifest(records, effective)
+    if not effective.quiet:
+        print(
+            f"{program_name}: I/O auto: io_slots={resolution.slots}; {resolution.reason}",
+            file=sys.stderr,
+        )
+    return jobs, effective
+
+
 def _run_command(
-    args: argparse.Namespace, config: Config, sevenzip: SevenZip, program_name: str
+    args: argparse.Namespace,
+    config: Config,
+    sevenzip: SevenZip,
+    program_name: str,
+    detector: StorageDetector | None,
 ) -> int:
     stream, should_close = _open_manifest(args.manifest)
     try:
@@ -179,7 +220,9 @@ def _run_command(
     finally:
         if should_close:
             stream.close()
-    jobs = validate_manifest(records, config)
+    jobs, config = _prepare_runtime_jobs(
+        records, config, program_name=program_name, detector=detector
+    )
     results, summary, exit_code = execute_manifest(
         jobs, config, sevenzip, program_name=program_name
     )
@@ -201,6 +244,7 @@ def main(
     *,
     program_name: str = "arcshuttle",
     legacy: bool = False,
+    storage_detector: StorageDetector | None = None,
 ) -> int:
     """Run the primary or compatibility CLI and return its process exit code."""
 
@@ -210,7 +254,7 @@ def main(
         sevenzip = SevenZip(find_executable(config.sevenzip))
         _show_sevenzip(sevenzip, config.quiet, program_name)
         if args.command == "run":
-            return _run_command(args, config, sevenzip, program_name)
+            return _run_command(args, config, sevenzip, program_name, storage_detector)
 
         operation = "extract" if legacy else getattr(args, "plan_operation", None) or args.command
         if operation == "create":
@@ -225,7 +269,15 @@ def main(
                 emit_jsonl(job)
             return 1 if planning.errors or planning.warnings else 0
 
-        jobs = validate_manifest(planning.jobs, config) if planning.jobs else []
+        if planning.jobs:
+            jobs, config = _prepare_runtime_jobs(
+                planning.jobs,
+                config,
+                program_name=program_name,
+                detector=storage_detector,
+            )
+        else:
+            jobs = []
         if not jobs:
             return 1 if planning.errors else 64
         results, summary, exit_code = execute_manifest(

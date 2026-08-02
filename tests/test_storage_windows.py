@@ -158,6 +158,17 @@ def test_missing_destination_uses_nearest_existing_parent(tmp_path: Path) -> Non
     assert native.resolved_path == os.fspath(tmp_path)
 
 
+def test_volume_classification_is_cached_for_the_command(tmp_path: Path) -> None:
+    native = FakeNativeApi(bus_type=StorageBusType.NVME)
+    detector = detector_for(native, tmp_path)
+
+    first = detector(tmp_path)
+    second = detector(tmp_path / "new" / "archive.7z")
+
+    assert first == second
+    assert native.opened == native.closed == 1
+
+
 @pytest.mark.parametrize(
     ("path", "expected_key"),
     [

@@ -88,6 +88,9 @@ class LinuxStorageDetector:
     list_directory: ListDirectory = field(default=_list_directory, repr=False)
     resolve_path: ResolvePath = field(default=_resolve_path, repr=False)
     device_numbers: DeviceNumbers = field(default=_device_numbers, repr=False)
+    _device_cache: dict[str, StorageObservation] = field(
+        default_factory=dict, init=False, repr=False
+    )
 
     def __call__(self, path: Path) -> StorageObservation:
         """Return a best-effort observation for *path* or its nearest existing parent."""
@@ -112,25 +115,36 @@ class LinuxStorageDetector:
 
         device_id = f"{major}:{minor}"
         device_key = f"linux:{device_id}"
+        cached = self._device_cache.get(device_key)
+        if cached is not None:
+            return cached
         filesystem = self._filesystem_type(device_id)
         if filesystem is not None and self._is_network_filesystem(filesystem):
-            return StorageObservation(
+            observation = StorageObservation(
                 device_key,
                 StorageClass.UNKNOWN,
                 f"{existing_path} uses network filesystem {filesystem}",
             )
+            self._device_cache[device_key] = observation
+            return observation
 
         device_link = self.sysfs_root / "dev" / "block" / device_id
         node, link_error = self._resolve_sysfs_path(device_link)
         if node is None:
-            return StorageObservation(
+            observation = StorageObservation(
                 device_key,
                 StorageClass.UNKNOWN,
                 f"sysfs metadata for {device_id} is unavailable: {link_error}",
             )
+            self._device_cache[device_key] = observation
+            return observation
 
         classification = self._classify_node(node, frozenset())
-        return StorageObservation(device_key, classification.storage_class, classification.reason)
+        observation = StorageObservation(
+            device_key, classification.storage_class, classification.reason
+        )
+        self._device_cache[device_key] = observation
+        return observation
 
     def _nearest_existing_device(self, path: Path) -> tuple[Path | None, int | None, str | None]:
         candidate = path

@@ -97,8 +97,8 @@ The scope column uses P for both plan operations, R for `run`, E for `extract`, 
 | `--existing {fail,skip,rename}` | enum | `fail` | A | non-destructive existing-output policy |
 | `--cpu-budget N or auto` | integer or `auto` | logical CPUs minus one | A | total CPU tokens |
 | `--max-processes N` | positive integer | `min(4,cpu_budget)` | A | concurrent 7-Zip process limit |
-| `--storage-profile {auto,hdd,ssd,nvme}` | enum | `auto` | A | conservative I/O-slot default selector |
-| `--io-slots N` | positive integer | profile-derived | A | total I/O tokens |
+| `--storage-profile {auto,hdd,ssd,nvme}` | enum | `auto` | A | runtime detection or a fixed I/O-slot profile |
+| `--io-slots N` | positive integer | auto/profile-derived | A | total I/O tokens; an explicit value wins |
 | `--heavy-threads N` | positive integer | `min(4,cpu_budget)` | A | scalable-job CPU/thread cap |
 | `--small-threshold SIZE` | size | `64M` | A | classify smaller inputs as `small` |
 | `--inspect-threshold SIZE` | size | `64M` | A | extraction inspection threshold |
@@ -235,6 +235,10 @@ sum(io_tokens)  <= io_slots
 ```
 
 Order is priority descending, profile rank (`heavy-scalable`, `heavy-serial`, `small`), estimated weight descending, then plan index. A fitting later job may backfill while the head cannot fit. Once the head waits `reservation_delay`, new backfill stops until it can run.
+
+With `storage_profile = "auto"` and no explicit `--io-slots`, `run`, `extract`, and `create` inspect every validated source and destination immediately before execution. The capacity map is HDD = 1, SSD = 2, NVMe = 4, and unknown = 2 I/O slots. ArcShuttle deduplicates paths on the same device, uses the lowest capacity among all endpoints, and caps the result at `max_processes`. Unsupported storage, unavailable metadata, permission failure, and any other detection failure use the unknown two-slot fallback; they do not prevent execution. The effective value and reason are diagnostic output on stderr unless `--quiet` is set.
+
+Standalone `plan` never probes storage and does not persist a hardware-specific budget in the manifest. This keeps one plan portable to another machine; resolution belongs to the process that executes it. An explicit `--io-slots` setting has highest precedence and bypasses detection. An explicitly configured `--storage-profile hdd`, `ssd`, or `nvme` also bypasses detection and supplies its fixed profile default. The same precedence applies whether the value comes from CLI, environment, or TOML configuration.
 
 `--fail-fast` stops new starts after a failed result, lets already running jobs finish, and reports unstarted jobs as skipped. Interruption stops new starts, signals managed child process groups, waits/terminates them safely, and reports interruption. The final v2 result order is deterministic plan order, not completion order.
 
