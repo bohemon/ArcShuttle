@@ -100,6 +100,8 @@ sum(io_tokens)  <= io_slots
 
 Jobs are ordered by priority, profile, estimated weight, and plan index. Backfill may use idle capacity until the queue head reaches `reservation_delay`. `--sequential-if-total-below SIZE` makes small batches use one process and one I/O slot.
 
+When neither `--io-slots` nor a non-`auto` storage profile is configured, execution resolves the shared I/O budget from every manifest source and destination: HDD = 1, SSD = 2, NVMe = 4, and unknown = 2 slots. The slowest endpoint wins, and `max_processes` remains the upper bound. Detection failure uses the two-slot fallback. A standalone `plan` command does not inspect storage, so the manifest remains portable; `run`, `extract`, and `create` resolve the budget immediately before execution. The selected value and reason are written to stderr unless `--quiet` is set. An explicit `--io-slots` value takes precedence, while an explicit `--storage-profile hdd`, `ssd`, or `nvme` selects the corresponding fixed profile default.
+
 Do not wrap several `arcshuttle run` commands in GNU Parallel: separate processes cannot share resource accounting.
 
 ## JSON Lines and exits

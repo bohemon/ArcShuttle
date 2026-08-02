@@ -162,6 +162,27 @@ def test_command_manual_defines_powershell_output_and_persistence_contracts(
     assert duplicate_term in text
 
 
+@pytest.mark.parametrize("manual", MANUALS, ids=("en", "ja"))
+def test_command_manual_defines_automatic_io_resolution_contract(manual: Path) -> None:
+    text = manual.read_text(encoding="utf-8")
+    required_terms = (
+        'storage_profile = "auto"',
+        "HDD = 1",
+        "SSD = 2",
+        "NVMe = 4",
+        "unknown = 2",
+        "source",
+        "destination",
+        "max_processes",
+        "stderr",
+        "--quiet",
+        "--io-slots",
+        "`plan`",
+    )
+
+    assert [term for term in required_terms if term not in text] == []
+
+
 def test_readme_has_required_arcshuttle_opening_and_migration_notes() -> None:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
 

@@ -97,8 +97,8 @@ parxtract extract [OPTIONS] PATH...
 | `--existing {fail,skip,rename}` | enum | `fail` | A | 非破壊の既存出力policy |
 | `--cpu-budget Nまたはauto` | integerまたは`auto` | 論理CPU数-1 | A | CPU token総数 |
 | `--max-processes N` | 正整数 | `min(4,cpu_budget)` | A | 同時7-Zip process上限 |
-| `--storage-profile {auto,hdd,ssd,nvme}` | enum | `auto` | A | 保守的I/O slot既定値の選択 |
-| `--io-slots N` | 正整数 | profile依存 | A | I/O token総数 |
+| `--storage-profile {auto,hdd,ssd,nvme}` | enum | `auto` | A | 実行時判定または固定I/O slot profile |
+| `--io-slots N` | 正整数 | 自動判定/profile依存 | A | I/O token総数。明示値を優先 |
 | `--heavy-threads N` | 正整数 | `min(4,cpu_budget)` | A | scalable jobのCPU/thread上限 |
 | `--small-threshold SIZE` | size | `64M` | A | これ未満を`small`分類 |
 | `--inspect-threshold SIZE` | size | `64M` | A | 展開検査のsize閾値 |
@@ -235,6 +235,10 @@ sum(io_tokens)  <= io_slots
 ```
 
 順序はpriority降順、profile順位（`heavy-scalable`、`heavy-serial`、`small`）、estimated weight降順、plan indexである。queue先頭が入らない間は、収まる後続jobをbackfillできる。先頭が`reservation_delay`待つと新規backfillを止め、実行可能になるまで資源を予約する。
+
+`storage_profile = "auto"`かつ`--io-slots`が明示されていない場合、`run`、`extract`、`create`は実行直前に、検証済みmanifestの全sourceとdestinationを調べる。capacity対応はHDD = 1、SSD = 2、NVMe = 4、unknown = 2 I/O slotである。同一device上のpathは重複排除し、全endpointのうち最小のcapacityを採用し、`max_processes`を上限とする。未対応storage、metadata取得不能、permission failure、その他の判定失敗はunknownの2 slot fallbackを使い、実行自体は妨げない。有効値と理由は`--quiet`がなければdiagnosticとしてstderrへ出力する。
+
+単独の`plan`はstorageをprobeせず、hardware固有の予算をmanifestへ永続化しない。そのため同じplanを別machineへ移して利用でき、判定は実行するprocessが担う。明示的な`--io-slots`が最優先であり、判定を迂回する。`--storage-profile hdd`、`ssd`、`nvme`が明示された場合も判定を迂回し、固定profile既定値を使う。CLI、環境変数、TOML設定のどこから指定した場合も同じ優先順位である。
 
 `--fail-fast`はfailed result後の新規startを止め、実行中jobを完了させ、未開始jobをskippedにする。割り込みは新規startを止め、管理child process groupへ通知し、安全に待機/終了してinterruptedを返す。v2 resultの最終出力順は完了順でなく決定的なplan順である。
 
