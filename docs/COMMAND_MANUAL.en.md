@@ -20,7 +20,7 @@ source_of_truth:
 
 This is the normative human/AI reference for ArcShuttle 0.3.1. “Must,” “must not,” and “may only” describe requirements. Stdout means the process standard-output byte stream; stderr means standard error.
 
-## 1. Minimum safe contract
+## 1. Minimum requirements for safe use
 
 1. Use `arcshuttle` for new work. Use `parxtract` only for compatibility with the extraction-only 0.1 syntax.
 2. Put the operation after `plan`: use `arcshuttle plan extract`, not `arcshuttle plan` by itself.
@@ -66,11 +66,13 @@ parxtract extract [OPTIONS] PATH...
 | `plan create` | regular files or directories | schema-v2 `job` records | inventory and plan independent archives |
 | `run` | v1/v2 JSON Lines manifest | `result` records, then `summary` | validate and execute one shared schedule |
 | `extract` | archive files | `result` records, then `summary` | plan and extract in one invocation |
-| `create` | regular files or directories | `result` records, then `summary` | plan, create, test, and commit archives |
+| `create` | regular files or directories | `result` records, then `summary` | plan, create, test, and finalize archives |
 
 `run --manifest -` reads JSON Lines from stdin. No path command reads stdin implicitly.
 
-## 3. Path input
+## 3. Specifying input paths
+
+Paths can be supplied positionally, as newline-delimited input, or as NUL-delimited input:
 
 | Form | Encoding | Contract |
 |---|---|---|
@@ -80,9 +82,9 @@ parxtract extract [OPTIONS] PATH...
 | `--files0-from FILE` | UTF-8 | NUL-delimited paths; trailing NUL allowed |
 | `--files0-from -` | UTF-8 | explicit NUL-delimited stdin |
 
-The forms are mutually exclusive. An explicitly empty list is an input error. Relative paths are normalized from the process working directory, and duplicates preserve their first occurrence.
+These three mechanisms are mutually exclusive. An explicitly empty list is an input error. Relative paths are normalized from the process working directory, and duplicates preserve their first occurrence.
 
-Extraction accepts regular archive files only and consolidates common multipart names to the first volume. Creation accepts a regular file or directory. It does not follow symlinks, junctions/reparse points, sockets, devices, or other non-regular entries; any such source or descendant is an input error. Empty directories are inventoried and preserved.
+`extract` accepts regular archive files only and consolidates common multipart names to the first volume. `create` accepts a regular file or directory. It does not follow symlinks, junctions/reparse points, sockets, devices, or other non-regular entries; any such source or descendant is an input error. Empty directories are inventoried and preserved.
 
 ## 4. Complete option reference
 
@@ -121,9 +123,9 @@ Size values are nonnegative integers with optional binary suffixes `K`, `M`, `G`
 
 `--existing rename` produces `name (2).7z`, `name (3).zip`, or the equivalent extraction directory. There is no overwrite option.
 
-## 5. Creation contract
+## 5. `create` command behavior
 
-Creation makes exactly one independent archive per input source. It does not combine several inputs into one archive.
+`create` makes exactly one independent archive per input source. It does not combine several inputs into one archive.
 
 | Source | Default destination | Stored archive root |
 |---|---|---|
@@ -132,11 +134,11 @@ Creation makes exactly one independent archive per input source. It does not com
 
 `--output-dir DIR` places each default archive name directly below `DIR`. `--format zip` changes the suffix to `.zip`. Levels are 0–9; the planned methods are LZMA2 for 7z and Deflate for zip. Level 0 tells 7-Zip to store rather than compress. Arbitrary raw 7-Zip options are not accepted.
 
-Planning records a deterministic inventory and source identity, then inventories the source again immediately before execution. An identity change fails by default; `--allow-changed` permits safe metadata or content-set changes with a warning, but never permits a source-kind change or non-regular entry.
+`plan create` records a deterministic inventory and source identity, then inventories the source again immediately before execution. An identity change fails by default; `--allow-changed` permits safe metadata or content-set changes with a warning, but never permits a source-kind change or non-regular entry.
 
 The destination, staging directory, and log root must not be inside a directory source. The check uses normalized/resolved path relationships, not name-based exclusions.
 
-Create scheduling:
+`create` job classification:
 
 | Rule | Profile | CPU tokens and threads |
 |---|---|---:|
@@ -146,15 +148,15 @@ Create scheduling:
 
 CPU tokens and `-mmt=N` do not strictly bound memory; LZMA2 memory use also depends on dictionary and method settings.
 
-## 6. Extraction contract
+## 6. `extract` command behavior
 
-The default extraction directory removes known archive and multipart suffixes: `a.7z` becomes `a/`, `b.tar.gz` becomes `b/`, `c.7z.001` becomes `c/`, and `d.part01.rar` becomes `d/`.
+`extract` derives the default destination directory by removing known archive and multipart suffixes: `a.7z` becomes `a/`, `b.tar.gz` becomes `b/`, `c.7z.001` becomes `c/`, and `d.part01.rar` becomes `d/`.
 
 Recognized multipart families include `.7z.001`, `.zip.001`, `.part1.rar`, `.part01.rar`, old `.rar` plus `.r00`, and `.zip` plus `.z01`. Supplying a later volume locates the first volume in the same directory or produces an input error.
 
 Large or unknown-format archives receive a bounded `7z l -slt` inspection. Missing metadata remains null. A timeout/failure warns and classifies conservatively. Positively identified encrypted archives fail at execution; password input and password search are not supported.
 
-Extraction profiles are `small`, `heavy-scalable` for evidence such as BZip2 or multiple independent 7z blocks, and `heavy-serial` for conservative/failed-inspection cases.
+`extract` profiles are `small`, `heavy-scalable` for evidence such as BZip2 or multiple independent 7z blocks, and `heavy-serial` for conservative/failed-inspection cases.
 
 ## 7. Configuration
 
@@ -212,9 +214,9 @@ Boolean environment values accept `1/0`, `true/false`, `yes/no`, and `on/off` wi
 
 7-Zip discovery uses explicit `--7z` or configured value, then `7zz`, `7z`, `7za` on PATH, then standard Windows install locations. The selected executable/version is printed on stderr unless `--quiet` is set.
 
-## 8. Shared scheduling
+## 8. Job ordering and resource allocation
 
-One mixed manifest uses one scheduler and always maintains:
+Jobs in one manifest use the same scheduler even when their operations differ. The scheduler always enforces these resource limits:
 
 ```text
 sum(cpu_tokens) <= cpu_budget
@@ -232,7 +234,7 @@ With `storage_profile = "auto"` and no explicit `--io-slots`, `run`, `extract`, 
 
 ### 9.1 Schema v2
 
-Both primary planners emit records shaped as follows:
+`arcshuttle plan extract` and `arcshuttle plan create` emit records shaped as follows:
 
 ```json
 {
@@ -294,15 +296,17 @@ arcshuttle plan create dir-a dir-b |
 
 A manifest may mix v1 extraction jobs with v2 jobs; the overall summary is schema v2 when any v2 input is present.
 
-## 10. Staging, verification, results, and logs
+## 10. Output verification, finalization, and execution records
 
-### 10.1 Extraction
+This section explains how `extract` and `create` safely finalize their outputs and describes the `result` records, final `summary`, and logs produced after execution.
 
-Extraction creates `.arcshuttle-<job-id>-<random>.tmp` beside the final directory, writes `.arcshuttle-owned`, and runs 7-Zip there. Exit 0 commits after a second destination check. Warning, failure, or interruption retains owned staging as `.failed`. Unowned paths are never moved or deleted.
+### 10.1 Finalizing `extract` output
 
-### 10.2 Creation
+`extract` creates `.arcshuttle-<job-id>-<random>.tmp` beside the final directory, writes `.arcshuttle-owned`, and runs 7-Zip there. Exit 0 finalizes the output after a second destination check. Warning, failure, or interruption retains owned staging as `.failed`. Unowned paths are never moved or deleted.
 
-Creation performs this order:
+### 10.2 Verifying and finalizing `create` output
+
+`create` performs this order:
 
 1. validate path relationships, source identity, and the non-destructive `--existing` policy;
 2. create a private, ownership-marked staging directory beside the destination;
@@ -310,11 +314,11 @@ Creation performs this order:
 4. require a regular staged archive and successful `7z t` verification;
 5. recheck that the destination is absent, publish atomically, and remove only an owned empty staging directory.
 
-Any create/test warning, failure, interruption, or pre-commit problem retains staging as `.failed`. Source paths are never moved, modified, or deleted.
+Any `create`/test warning, failure, interruption, or pre-finalization problem retains staging as `.failed`. Source paths are never moved, modified, or deleted.
 
-### 10.3 Results
+### 10.3 Execution results and summary
 
-Statuses are `success`, `warning`, `failed`, `skipped`, and `interrupted`. Every v2 result includes `operation`, `output_path`, `staging_path`, and the legacy aliases `output_dir`/`staging_dir`. Create results also include `create_exit_code` and `verification_exit_code`; either can be null if that process did not start. `log_path` points to job logs when present.
+Statuses are `success`, `warning`, `failed`, `skipped`, and `interrupted`. Every v2 result includes `operation`, `output_path`, `staging_path`, and the legacy aliases `output_dir`/`staging_dir`. `create` results also include `create_exit_code` and `verification_exit_code`; either can be null if that process did not start. `log_path` points to job logs when present.
 
 The final record is a `summary` with total and counts for all five statuses plus `duration_ms`.
 
@@ -326,11 +330,11 @@ The final record is a `summary` with total and counts for all five statuses plus
 | 64 | usage, configuration, input, or manifest error | normally no |
 | 130 | interrupted | yes |
 
-### 10.4 Logs
+### 10.4 Execution logs
 
 Default root: `<cwd>/.arcshuttle/logs/<run-id>/<job-id>/`.
 
-Extraction logs are `metadata.json`, `stdout.log`, and `stderr.log`. Creation logs are `metadata.json`, `create.stdout.log`, `create.stderr.log`, `test.stdout.log`, and `test.stderr.log`. Creation metadata records safe actual argument arrays, working directories, allocated CPU/threads, process times/exits, errors, and commit outcome. 7-Zip output never enters JSON stdout.
+`extract` logs are `metadata.json`, `stdout.log`, and `stderr.log`. `create` logs are `metadata.json`, `create.stdout.log`, `create.stderr.log`, `test.stdout.log`, and `test.stderr.log`. `create` metadata records safe actual argument arrays, working directories, allocated CPU/threads, process times/exits, errors, and finalization outcome. 7-Zip output never enters JSON stdout.
 
 ## 11. PowerShell 7
 
@@ -345,13 +349,13 @@ Get-ChildItem C:\Archives -File |
     Invoke-ArcShuttleExtract -OutputDir C:\Extracted
 ```
 
-| Function | Pipeline input | Equivalent operation |
+| Function | Pipeline input | CLI equivalent |
 |---|---|---|
 | `Invoke-ArcShuttleExtractPlan` | string or `FileSystemInfo` | `plan extract` |
 | `Invoke-ArcShuttleCreatePlan` | string or `FileSystemInfo` | `plan create`; each item is independent |
 | `Invoke-ArcShuttleRun` | job objects | `run` |
-| `Invoke-ArcShuttleExtract` | string or `FileSystemInfo` | plan then run extraction |
-| `Invoke-ArcShuttleCreate` | string or `FileSystemInfo` | plan then run creation |
+| `Invoke-ArcShuttleExtract` | string or `FileSystemInfo` | `plan extract`, then `run` |
+| `Invoke-ArcShuttleCreate` | string or `FileSystemInfo` | `plan create`, then `run` |
 
 PowerShell parameters map by name: `-ArcShuttleCommand`, `-SevenZip`/`-7z`, `-OutputDir`, `-Existing`, `-CpuBudget`, `-MaxProcesses`, `-StorageProfile`, `-IoSlots`, `-HeavyThreads`, `-SmallThreshold`, `-InspectThreshold`, `-InspectTimeout`, `-ReservationDelay`, `-SequentialIfTotalBelow`, `-LogDir`, `-Config`, `-OnInputError`, `-Quiet`, `-FailFast`, and `-AllowChanged`. Create plan/combined functions also accept `-Format` and `-Level`.
 
@@ -440,8 +444,8 @@ Use `set -o pipefail` when shell pipeline status matters, but remember that plan
 ## 13. Migration from parxtract 0.1
 
 - Install distribution `arcshuttle`, which includes both console scripts, and use `arcshuttle` for new CLI and PowerShell workflows.
-- Existing `parxtract` commands, the compatibility module, and schema-v1 manifests remain supported for extraction.
-- Prefer `ARCSHUTTLE_*` and `[arcshuttle]`; the new names take precedence, and creation settings have no legacy aliases.
+- Existing `parxtract` commands, the compatibility module, and schema-v1 manifests remain supported for `extract`.
+- Prefer `ARCSHUTTLE_*` and `[arcshuttle]`; the new names take precedence, and `create` settings have no legacy aliases.
 - Existing `.parxtract` data is not migrated, renamed, claimed, or deleted. ArcShuttle writes new `.arcshuttle` paths.
 
 ## 14. AI-agent procedure
@@ -469,7 +473,7 @@ else:
 
 ## 15. Limits and troubleshooting
 
-Creation supports one source per archive, 7z/zip, levels 0–9, regular entries, and local non-split output. Multi-source, split, and encrypted creation, password input, raw method tuning, a strict memory budget, a GUI, and a watch service are not supported.
+`create` supports one source per archive, 7z/zip, levels 0–9, regular entries, and local non-split output. Multi-source, split, and encrypted creation, password input, raw method tuning, a strict memory budget, a GUI, and a watch service are not supported.
 
 | Symptom | Check | Safe response |
 |---|---|---|
@@ -479,5 +483,5 @@ Creation supports one source per archive, 7z/zip, levels 0–9, regular entries,
 | source identity changed | modifications since plan | re-plan; use `--allow-changed` only intentionally |
 | immutable fields modified | external filter | restart from original plan and edit only allowlist |
 | output collision | duplicate derived/edited paths | select unique destinations |
-| `.failed` remains | create/test/extract warning or failure | inspect logs and recover manually |
+| `.failed` remains | `create`/test/`extract` warning or failure | inspect logs and recover manually |
 | HDD throughput drops | I/O contention | select `hdd` or `--io-slots 1` |

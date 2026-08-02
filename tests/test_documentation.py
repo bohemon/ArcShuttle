@@ -192,8 +192,8 @@ def test_command_manual_defines_powershell_output_and_persistence_contracts(
         (
             "display formatting",
             "output collision",
-            "plan then run extraction",
-            "plan then run creation",
+            "`plan extract`, then `run`",
+            "`plan create`, then `run`",
         )
         if manual.name.endswith(".en.md")
         else (
@@ -384,6 +384,39 @@ def test_japanese_command_manual_uses_clear_operation_aware_section_titles() -> 
     )
 
     assert [term for term in required_terms if term not in text] == []
+
+
+def test_english_manuals_use_aligned_purpose_oriented_wording() -> None:
+    command_manual = (ROOT / "docs" / "COMMAND_MANUAL.en.md").read_text(encoding="utf-8")
+    installation_guide = (ROOT / "docs" / "INSTALLATION.en.md").read_text(encoding="utf-8")
+    required_command_terms = (
+        "## 1. Minimum requirements for safe use",
+        "## 3. Specifying input paths",
+        "## 5. `create` command behavior",
+        "## 6. `extract` command behavior",
+        "## 8. Job ordering and resource allocation",
+        "## 10. Output verification, finalization, and execution records",
+        "### 10.1 Finalizing `extract` output",
+        "### 10.2 Verifying and finalizing `create` output",
+        "### 10.3 Execution results and summary",
+        "### 10.4 Execution logs",
+        "| Function | Pipeline input | CLI equivalent |",
+        "finalizes the output after a second destination check",
+        "pre-finalization problem",
+        "finalization outcome",
+    )
+    required_installation_terms = (
+        "### Recommended: per-application virtual environment with pipx",
+        "creates a dedicated virtual environment for each command-line",
+    )
+
+    assert [term for term in required_command_terms if term not in command_manual] == []
+    assert [term for term in required_installation_terms if term not in installation_guide] == []
+    assert [
+        term
+        for term in ("Exit 0 commits", "pre-commit problem", "commit outcome")
+        if term in command_manual
+    ] == []
 
 
 def test_japanese_manuals_follow_external_tool_terminology() -> None:
