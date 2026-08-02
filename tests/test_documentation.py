@@ -356,6 +356,20 @@ def test_japanese_command_manual_marks_arcshuttle_concepts_as_italics() -> None:
     assert unmarked == []
 
 
+def test_japanese_command_manual_uses_literal_operation_names_for_sections() -> None:
+    text = (ROOT / "docs" / "COMMAND_MANUAL.ja.md").read_text(encoding="utf-8")
+    required_terms = (
+        "### 10.1 `extract`",
+        "### 10.2 `create`",
+        "`extract`のログ",
+        "`create`のログ",
+        "`extract`で引き続き利用",
+        "`create`の設定",
+    )
+
+    assert [term for term in required_terms if term not in text] == []
+
+
 def test_readme_covers_stable_project_entrypoint_contracts() -> None:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
 
