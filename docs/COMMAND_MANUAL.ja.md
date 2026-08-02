@@ -375,9 +375,9 @@ Get-ChildItem C:\Archives -File |
 
 PowerShellでは、対応するパラメーターとして次の名前を使う：`-ArcShuttleCommand`、`-SevenZip`／`-7z`、`-OutputDir`、`-Existing`、`-CpuBudget`、`-MaxProcesses`、`-StorageProfile`、`-IoSlots`、`-HeavyThreads`、`-SmallThreshold`、`-InspectThreshold`、`-InspectTimeout`、`-ReservationDelay`、`-SequentialIfTotalBelow`、`-LogDir`、`-Config`、`-OnInputError`、`-Quiet`、`-FailFast`、`-AllowChanged`。`create`の*plan*関数と一括実行関数は、`-Format`と`-Level`も受け付ける。
 
-モジュールは、PowerShellのSuccessストリームへ`PSCustomObject`レコードだけを出力し、`$LASTEXITCODE`を保持して一時ファイルを削除する。ネイティブCLIの進捗と診断は標準エラー出力へリアルタイムで転送する。`-Quiet`は対応する情報レベルの診断を抑制するが、警告とエラーは引き続き標準エラー出力へ書き込む。
+モジュールは、PowerShellのSuccess ストリームへ`PSCustomObject`レコードだけを出力し、`$LASTEXITCODE`を保持して一時ファイルを削除する。ネイティブCLIの進捗と診断は標準エラー出力へリアルタイムで転送する。`-Quiet`は対応する情報レベルの診断を抑制するが、警告とエラーは引き続き標準エラー出力へ書き込む。
 
-純粋なオブジェクトパイプラインではストリームを分離する。明示的な`2>&1`はPowerShellのErrorストリームをSuccessストリームへリダイレクトするため、診断の`ErrorRecord`と成功出力の`PSCustomObject`が意図的に混在する：
+純粋なオブジェクトパイプラインではストリームを分離する。明示的な`2>&1`はPowerShellのError ストリームをSuccess ストリームへリダイレクトするため、診断の`ErrorRecord`と成功出力の`PSCustomObject`が意図的に混在する：
 
 ```powershell
 # 混合出力：一体のトランスクリプトには有用だが、純粋なオブジェクトパイプラインではない。
@@ -395,9 +395,9 @@ Get-ChildItem C:\Archives -File |
 |---|---|---|
 | `arcshuttle plan`／`parxtract plan` | 正規のUTF-8 JSON Lines | 可搬性のある*manifest*ファイルとPowerShell以外のツール |
 | `Invoke-ArcShuttle*Plan`／`Invoke-ParxtractPlan` | `PSCustomObject`レコード | 同一セッション内のPowerShellオブジェクトパイプライン |
-| `Export-Clixml`／`Import-Clixml` | PowerShellオブジェクトのスナップショット | PowerShell専用のセッション間保存 |
+| `Export-Clixml`／`Import-Clixml` | PowerShell オブジェクトのスナップショット | PowerShell専用のセッション間保存 |
 
-同じPowerShellセッション内で*plan*を作成して実行する場合は、オブジェクトのまま扱う：
+同じPowerShell セッション内で*plan*を作成して実行する場合は、オブジェクトのまま扱う：
 
 ```powershell
 $plans = @(
@@ -459,7 +459,7 @@ fd --type f --print0 . /data/archives |
 
 ## 13. parxtract 0.1からの移行
 
-- 配布名`arcshuttle`には、両方のコンソールスクリプトが含まれる。新しいCLIとPowerShellワークフローでは`arcshuttle`を使う。
+- 配布名`arcshuttle`には、両方のコンソールスクリプトが含まれる。新しいCLIとPowerShell ワークフローでは`arcshuttle`を使う。
 - 既存の`parxtract`コマンド、互換モジュール、スキーマv1の*manifest*は、`extract`で引き続き利用できる。
 - `ARCSHUTTLE_*`と`[arcshuttle]`を優先する。新名称が優先され、`create`の設定に旧形式の別名はない。
 - 既存の`.parxtract`データは移行、改名、所有、削除しない。ArcShuttleは新しい`.arcshuttle`パスへ書き込む。

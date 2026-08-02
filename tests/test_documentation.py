@@ -265,7 +265,7 @@ def test_japanese_manual_prose_does_not_use_unformatted_english_terms(
     document: Path,
 ) -> None:
     prose = _markdown_prose(document)
-    prose_without_external_terms = prose.replace("PowerShellのErrorストリーム", "")
+    prose_without_external_terms = prose.replace("PowerShellのError ストリーム", "")
     bare_general_terms = (
         "archive",
         "boolean",
@@ -390,23 +390,40 @@ def test_japanese_manuals_follow_external_tool_terminology() -> None:
     command_manual = (ROOT / "docs" / "COMMAND_MANUAL.ja.md").read_text(encoding="utf-8")
     installation_guide = (ROOT / "docs" / "INSTALLATION.ja.md").read_text(encoding="utf-8")
 
-    assert "PowerShellのSuccessストリーム" in command_manual
-    assert "PowerShellのErrorストリーム" in command_manual
+    assert "PowerShellのSuccess ストリーム" in command_manual
+    assert "PowerShellのError ストリーム" in command_manual
     assert "[pipx](https://pipx.pypa.io/)" in installation_guide
     assert "pipxによる仮想環境へのインストール" in installation_guide
     assert "GitHubリリースのwheelファイル" in installation_guide
+    assert "`main`ブランチ" in installation_guide
+    assert "タグまたはコミット" in installation_guide
+    assert "チェックアウト" in installation_guide
+    assert "クローン" in installation_guide
+    assert "PowerShell モジュール" in installation_guide
     assert "モジュール マニフェスト" in installation_guide
 
     deprecated_terms = (
+        "PowerShellのSuccessストリーム",
+        "PowerShellのErrorストリーム",
         "PowerShellの成功ストリーム",
         "PowerShellのエラーストリーム",
         "PowerShellの`Success`ストリーム",
         "PowerShellの`Error`ストリーム",
         "PowerShellの*Success*ストリーム",
         "PowerShellの*Error*ストリーム",
+        "`PowerShell`",
+        "*PowerShell*",
+        "`Python`",
+        "*Python*",
+        "`GitHub`",
+        "*GitHub*",
+        "`wheel`",
+        "*wheel*",
         "[`pipx`](https://pipx.pypa.io/)",
+        "[*pipx*](https://pipx.pypa.io/)",
         "pipxによる分離インストール",
         "リリース用wheelファイル",
+        "PowerShellモジュール",
         "モジュールマニフェスト",
     )
     combined_text = command_manual + installation_guide

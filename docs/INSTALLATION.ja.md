@@ -10,7 +10,7 @@
 - WindowsまたはLinux
 - Python 3.11以降
 - 現行の`7zz`、`7z`、または`7za`の実行ファイル
-- 任意のオブジェクトパイプラインモジュールを使う場合のみPowerShell 7
+- PowerShell 7（任意のオブジェクトパイプライン用モジュールを使う場合のみ）
 
 ## CLIのインストール
 
@@ -61,10 +61,10 @@ pipx install "arcshuttle @ git+https://github.com/bohemon/ArcShuttle.git@v0.3.1"
 インストールは未リリースの変更へ追従するため、エンドユーザー向けの安定したインストールには
 推奨しない。
 
-## PowerShellモジュールのインストール
+## PowerShell モジュールのインストール
 
 v0.3.1のリリースには、`ArcShuttle`モジュールと互換用の`Parxtract`モジュールが含まれる。
-次のPowerShell 7のコマンドは、アーカイブとチェックサムをダウンロードして検証した後、
+次のコマンドをPowerShell 7で実行すると、アーカイブとチェックサムをダウンロードして検証した後、
 `CurrentUser`用のバージョン別モジュールディレクトリへインストールする。ダウンロードした
 テキストを実行することはない。
 
@@ -98,7 +98,7 @@ Import-Module ArcShuttle -RequiredVersion $version -Force
 Get-Command -Module ArcShuttle
 ```
 
-PowerShellモジュールはPythonや7-Zipを同梱せず、`arcshuttle` CLIを呼び出すため、CLIも
+PowerShell モジュールはPythonや7-Zipを同梱せず、`arcshuttle` CLIを呼び出すため、CLIも
 `PATH`上に必要となる。互換モジュールが必要な場合は、
 `Import-Module Parxtract -RequiredVersion $version`でインポートする。
 
