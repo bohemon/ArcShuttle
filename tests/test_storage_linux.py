@@ -166,6 +166,23 @@ def test_duplicate_paths_have_the_same_device_identity(tmp_path: Path) -> None:
     assert first_result.device_key == second_result.device_key == "linux:8:0"
 
 
+def test_device_classification_is_cached_for_the_command(tmp_path: Path) -> None:
+    fake = FakeLinuxMetadata(tmp_path)
+    first = tmp_path / "first"
+    second = tmp_path / "second"
+    fake.endpoint(first, 8, 0)
+    fake.endpoint(second, 8, 0)
+    node = fake.block_device(8, 0, "pci/block/sda")
+    fake.rotational(node, "1")
+    detector = fake.detector()
+
+    assert detector(first).storage_class is StorageClass.HDD
+    fake.text[node / "queue" / "rotational"] = AssertionError("cache was not used")
+    fake.links[fake.root / "sys" / "dev" / "block" / "8:0"] = AssertionError("cache was not used")
+
+    assert detector(second).storage_class is StorageClass.HDD
+
+
 def test_missing_destination_uses_nearest_existing_parent(tmp_path: Path) -> None:
     fake = FakeLinuxMetadata(tmp_path)
     parent = tmp_path / "destination"

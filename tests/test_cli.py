@@ -11,6 +11,7 @@ from arcshuttle.config import Config
 from arcshuttle.multipart import MultipartInfo
 from arcshuttle.operations.extract import make_legacy_plan
 from arcshuttle.sevenzip import ProcessOutcome
+from arcshuttle.storage import StorageClass, StorageObservation
 
 
 class PlanningSevenZip:
@@ -124,6 +125,21 @@ def test_arcshuttle_plan_create_outputs_schema_v2(
     }
 
 
+def test_standalone_plan_never_detects_runtime_storage(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source = tmp_path / "plan-only.dat"
+    source.write_bytes(b"data")
+    patch_sevenzip(monkeypatch, PlanningSevenZip())
+
+    def forbidden(_path: Path) -> StorageObservation:
+        raise AssertionError("standalone planning must not inspect runtime storage")
+
+    code = cli.main(["plan", "create", "--quiet", str(source)], storage_detector=forbidden)
+
+    assert code == 0
+
+
 def test_arcshuttle_plan_create_reads_utf8_nul_input(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -146,6 +162,11 @@ def test_arcshuttle_create_plans_and_runs_in_one_invocation(
     source = tmp_path / "source.dat"
     source.write_bytes(b"source")
     patch_sevenzip(monkeypatch, FullCreateSevenZip())
+    detected: list[Path] = []
+
+    def detector(path: Path) -> StorageObservation:
+        detected.append(path)
+        return StorageObservation("fixture:nvme", StorageClass.NVME, "fixture")
 
     code = cli.main(
         [
@@ -154,16 +175,19 @@ def test_arcshuttle_create_plans_and_runs_in_one_invocation(
             str(tmp_path / "out"),
             "--log-dir",
             str(tmp_path / "logs"),
-            "--quiet",
             str(source),
-        ]
+        ],
+        storage_detector=detector,
     )
-    records = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
+    captured = capsys.readouterr()
+    records = [json.loads(line) for line in captured.out.splitlines()]
 
     assert code == 0
     assert [record["record_type"] for record in records] == ["result", "summary"]
     assert records[0]["operation"] == "create"
     assert Path(records[0]["output_dir"]).read_bytes() == b"created"
+    assert detected == [source, tmp_path / "out" / "source.dat.7z"]
+    assert "arcshuttle: I/O auto: io_slots=4" in captured.err
 
 
 def test_no_implicit_stdin(
@@ -253,6 +277,24 @@ def test_malformed_manifest_is_cli_error(
     assert code == 64
 
 
+def test_invalid_manifest_shape_is_rejected_before_storage_detection(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    manifest = tmp_path / "manifest.jsonl"
+    manifest.write_text('{"schema_version":2,"record_type":"job"}\n', encoding="utf-8")
+    patch_sevenzip(monkeypatch, PlanningSevenZip())
+
+    def forbidden(_path: Path) -> StorageObservation:
+        raise AssertionError("invalid manifests must not invoke detection")
+
+    code = cli.main(["run", "--manifest", str(manifest)], storage_detector=forbidden)
+    captured = capsys.readouterr()
+
+    assert code == 64
+    assert captured.out == ""
+    assert "missing field" in captured.err
+
+
 def test_plan_filter_run_contract_emits_result_then_summary(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -264,9 +306,15 @@ def test_plan_filter_run_contract_emits_result_then_summary(
     manifest = tmp_path / "plan.jsonl"
     manifest.write_text(json.dumps(planning.jobs[0]) + "\n", encoding="utf-8")
     patch_sevenzip(monkeypatch, FullSevenZip())
+    detected: list[Path] = []
 
-    code = compat.parxtract_main(
-        ["run", "--quiet", "--manifest", str(manifest), "--log-dir", str(tmp_path / "logs")]
+    def detector(path: Path) -> StorageObservation:
+        detected.append(path)
+        return StorageObservation("fixture:ssd", StorageClass.SSD, "fixture")
+
+    code = cli.main(
+        ["run", "--quiet", "--manifest", str(manifest), "--log-dir", str(tmp_path / "logs")],
+        storage_detector=detector,
     )
     captured = capsys.readouterr()
     records = [json.loads(line) for line in captured.out.splitlines()]
@@ -274,6 +322,7 @@ def test_plan_filter_run_contract_emits_result_then_summary(
     assert code == 0
     assert [record["record_type"] for record in records] == ["result", "summary"]
     assert records[0]["status"] == "success"
+    assert detected == [archive.resolve(), (tmp_path / "out" / "archive").resolve()]
 
 
 def test_extract_convenience_command(
@@ -282,6 +331,13 @@ def test_extract_convenience_command(
     archive = tmp_path / "archive.zip"
     archive.write_bytes(b"zip")
     patch_sevenzip(monkeypatch, FullSevenZip())
+    detected: list[Path] = []
+
+    def detector(path: Path) -> StorageObservation:
+        detected.append(path)
+        return StorageObservation("fixture:nvme", StorageClass.NVME, "fixture")
+
+    monkeypatch.setattr(cli, "default_storage_detector", lambda: detector)
 
     code = compat.parxtract_main(
         [
@@ -299,6 +355,7 @@ def test_extract_convenience_command(
 
     assert (code, records[0]["status"]) == (0, "success")
     assert (tmp_path / "out" / "archive" / "payload.txt").is_file()
+    assert detected == [archive.resolve(), (tmp_path / "out" / "archive").resolve()]
 
 
 def test_arcshuttle_extract_executes_schema_v2(
@@ -307,6 +364,11 @@ def test_arcshuttle_extract_executes_schema_v2(
     archive = tmp_path / "archive.zip"
     archive.write_bytes(b"zip")
     patch_sevenzip(monkeypatch, FullSevenZip())
+    detected: list[Path] = []
+
+    def detector(path: Path) -> StorageObservation:
+        detected.append(path)
+        return StorageObservation("fixture:ssd", StorageClass.SSD, "fixture")
 
     code = cli.main(
         [
@@ -317,7 +379,8 @@ def test_arcshuttle_extract_executes_schema_v2(
             "--log-dir",
             str(tmp_path / "logs"),
             str(archive),
-        ]
+        ],
+        storage_detector=detector,
     )
     records = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
 
@@ -325,3 +388,4 @@ def test_arcshuttle_extract_executes_schema_v2(
     assert records[0]["schema_version"] == 2
     assert records[0]["operation"] == "extract"
     assert records[-1]["schema_version"] == 2
+    assert detected == [archive.resolve(), (tmp_path / "out" / "archive").resolve()]

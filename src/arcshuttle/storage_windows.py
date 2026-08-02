@@ -320,6 +320,7 @@ class WindowsStorageDetector:
     ) -> None:
         self._native = native
         self._lexists = os.path.lexists if lexists is None else lexists
+        self._volume_cache: dict[str, StorageObservation] = {}
 
     def __call__(self, path: Path) -> StorageObservation:
         unc_key = _unc_share_key(path)
@@ -354,23 +355,32 @@ class WindowsStorageDetector:
 
         normalized_root = volume_root.rstrip("\\").casefold()
         root_key = f"windows:root:{normalized_root}"
+        cached = self._volume_cache.get(root_key)
+        if cached is not None:
+            return cached
         if drive_type is DriveType.REMOTE:
-            return StorageObservation(
+            observation = StorageObservation(
                 root_key, StorageClass.UNKNOWN, "the volume is network storage"
             )
+            self._volume_cache[root_key] = observation
+            return observation
         if drive_type not in {DriveType.FIXED, DriveType.REMOVABLE}:
-            return StorageObservation(
+            observation = StorageObservation(
                 root_key,
                 StorageClass.UNKNOWN,
                 f"Windows drive type {drive_type.name.lower()} is unsupported",
             )
+            self._volume_cache[root_key] = observation
+            return observation
 
         try:
             volume_name = native.volume_name(volume_root)
         except Exception as exc:
-            return StorageObservation(
+            observation = StorageObservation(
                 root_key, StorageClass.UNKNOWN, _error_reason("resolving the volume identity", exc)
             )
+            self._volume_cache[root_key] = observation
+            return observation
         volume_key = _volume_key(volume_name)
 
         try:
@@ -378,34 +388,43 @@ class WindowsStorageDetector:
                 identity = native.device_identity(handle)
                 bus_type = native.bus_type(handle)
                 if bus_type == StorageBusType.NVME:
-                    return StorageObservation(
+                    observation = StorageObservation(
                         identity.key, StorageClass.NVME, "Windows reports an NVMe storage bus"
                     )
+                    self._volume_cache[root_key] = observation
+                    return observation
                 if bus_type in _VIRTUAL_BUS_TYPES:
                     bus_name = StorageBusType(bus_type).name.lower().replace("_", "-")
-                    return StorageObservation(
+                    observation = StorageObservation(
                         identity.key,
                         StorageClass.UNKNOWN,
                         f"Windows reports an unsupported {bus_name} storage layout",
                     )
+                    self._volume_cache[root_key] = observation
+                    return observation
                 seek_penalty = native.incurs_seek_penalty(handle)
         except Exception as exc:
-            return StorageObservation(
+            observation = StorageObservation(
                 volume_key, StorageClass.UNKNOWN, _error_reason("querying storage metadata", exc)
             )
+            self._volume_cache[root_key] = observation
+            return observation
 
         removable = " removable" if drive_type is DriveType.REMOVABLE else ""
         if seek_penalty:
-            return StorageObservation(
+            observation = StorageObservation(
                 identity.key,
                 StorageClass.HDD,
                 f"Windows reports that the{removable} device incurs seek penalty",
             )
-        return StorageObservation(
-            identity.key,
-            StorageClass.SSD,
-            f"Windows reports that the{removable} non-NVMe device has no seek penalty",
-        )
+        else:
+            observation = StorageObservation(
+                identity.key,
+                StorageClass.SSD,
+                f"Windows reports that the{removable} non-NVMe device has no seek penalty",
+            )
+        self._volume_cache[root_key] = observation
+        return observation
 
 
 def detect_windows_storage(path: Path) -> StorageObservation:

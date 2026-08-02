@@ -120,7 +120,12 @@ def _validate_string_array(value: Any, name: str) -> list[str]:
 
 
 def _validate_scheduling(
-    scheduling: dict[str, Any], warnings: list[str], prefix: str, config: Config
+    scheduling: dict[str, Any],
+    warnings: list[str],
+    prefix: str,
+    config: Config,
+    *,
+    enforce_io_budget: bool,
 ) -> None:
     profile = scheduling.get("profile")
     if profile not in _PROFILES:
@@ -149,7 +154,7 @@ def _validate_scheduling(
         scheduling["profile_source"] = "manifest"
         scheduling["classification_reason"] = "manifest-override"
         warnings.append(f"scheduling profile overridden from {planned_profile} to {profile}")
-    if scheduling["io_tokens"] > config.io_slots:
+    if enforce_io_budget and scheduling["io_tokens"] > config.io_slots:
         raise UsageError(f"{prefix}: io_tokens exceeds configured I/O slots")
 
 
@@ -186,7 +191,13 @@ def _convert_v1(job: dict[str, Any]) -> dict[str, Any]:
     return converted
 
 
-def _validate_v1(job: dict[str, Any], prefix: str, config: Config) -> dict[str, Any]:
+def _validate_v1(
+    job: dict[str, Any],
+    prefix: str,
+    config: Config,
+    *,
+    enforce_io_budget: bool,
+) -> dict[str, Any]:
     required = {
         "job_id",
         "plan_index",
@@ -223,11 +234,23 @@ def _validate_v1(job: dict[str, Any], prefix: str, config: Config) -> dict[str, 
         raise UsageError(f"{prefix}.output_dir must be absolute")
     if job["integrity"] != calculate_integrity(job):
         raise UsageError(f"{prefix}: immutable manifest fields were modified")
-    _validate_scheduling(scheduling, warnings, f"{prefix}.scheduling", config)
+    _validate_scheduling(
+        scheduling,
+        warnings,
+        f"{prefix}.scheduling",
+        config,
+        enforce_io_budget=enforce_io_budget,
+    )
     return _convert_v1(job)
 
 
-def _validate_v2(job: dict[str, Any], prefix: str, config: Config) -> dict[str, Any]:
+def _validate_v2(
+    job: dict[str, Any],
+    prefix: str,
+    config: Config,
+    *,
+    enforce_io_budget: bool,
+) -> dict[str, Any]:
     required = {
         "operation",
         "job_id",
@@ -290,13 +313,21 @@ def _validate_v2(job: dict[str, Any], prefix: str, config: Config) -> dict[str, 
     scheduling = _require_mapping(job["scheduling"], f"{prefix}.scheduling")
     if job["integrity"] != calculate_integrity(job):
         raise UsageError(f"{prefix}: immutable manifest fields were modified")
-    _validate_scheduling(scheduling, warnings, f"{prefix}.scheduling", config)
+    _validate_scheduling(
+        scheduling,
+        warnings,
+        f"{prefix}.scheduling",
+        config,
+        enforce_io_budget=enforce_io_budget,
+    )
     job["_input_schema_version"] = SCHEMA_VERSION
     job["integrity"] = calculate_integrity(job)
     return job
 
 
-def validate_manifest(records: list[dict[str, Any]], config: Config) -> list[dict[str, Any]]:
+def validate_manifest(
+    records: list[dict[str, Any]], config: Config, *, enforce_io_budget: bool = True
+) -> list[dict[str, Any]]:
     """Validate the complete input and return canonical schema-v2 runtime jobs."""
 
     if not records:
@@ -311,9 +342,9 @@ def validate_manifest(records: list[dict[str, Any]], config: Config) -> list[dic
             raise UsageError(f"{prefix}: record_type must be job")
         version = job.get("schema_version")
         if version == LEGACY_SCHEMA_VERSION:
-            normalized = _validate_v1(job, prefix, config)
+            normalized = _validate_v1(job, prefix, config, enforce_io_budget=enforce_io_budget)
         elif version == SCHEMA_VERSION:
-            normalized = _validate_v2(job, prefix, config)
+            normalized = _validate_v2(job, prefix, config, enforce_io_budget=enforce_io_budget)
         else:
             raise UsageError(f"{prefix}: unsupported schema_version {version!r}")
         job_id = normalized["job_id"]
