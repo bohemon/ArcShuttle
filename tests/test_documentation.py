@@ -419,6 +419,39 @@ def test_english_manuals_use_aligned_purpose_oriented_wording() -> None:
     ] == []
 
 
+def test_english_command_manual_defines_concepts_once_without_repeated_emphasis() -> None:
+    text = (ROOT / "docs" / "COMMAND_MANUAL.en.md").read_text(encoding="utf-8")
+    concepts = (
+        "operation",
+        "plan",
+        "source",
+        "destination",
+        "inventory",
+        "job",
+        "manifest",
+        "profile",
+        "schedule",
+        "scheduler",
+        "staging",
+        "result",
+        "summary",
+        "allowlist",
+        "CPU token",
+        "I/O token",
+        "I/O slot",
+    )
+
+    assert "regular text for general English and for ArcShuttle concepts" in text
+    assert "Exact commands, options, fields, values, messages, and filenames use code" in text
+    assert [concept for concept in concepts if text.count(f"**{concept}**") != 1] == []
+    italicized = [
+        concept
+        for concept in concepts
+        if re.search(rf"(?<!\*)\*{re.escape(concept)}\*(?!\*)", text)
+    ]
+    assert italicized == []
+
+
 def test_japanese_manuals_follow_external_tool_terminology() -> None:
     command_manual = (ROOT / "docs" / "COMMAND_MANUAL.ja.md").read_text(encoding="utf-8")
     installation_guide = (ROOT / "docs" / "INSTALLATION.ja.md").read_text(encoding="utf-8")

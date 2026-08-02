@@ -20,6 +20,24 @@ source_of_truth:
 
 This is the normative human/AI reference for ArcShuttle 0.3.1. “Must,” “must not,” and “may only” describe requirements. Stdout means the process standard-output byte stream; stderr means standard error.
 
+This manual uses regular text for general English and for ArcShuttle concepts after they are defined. Exact commands, options, fields, values, messages, and filenames use code formatting. The bold entries below define the main ArcShuttle concepts used throughout the manual.
+
+| Term | Meaning in this manual |
+|---|---|
+| **operation** | action selected for a job; the literal value is `extract` or `create` |
+| **plan** | pre-execution job record or collection produced by the `plan` command |
+| **source** / **destination** | input being processed / final output path |
+| **inventory** | deterministic record of a `create` source's contents |
+| **job** | individual unit of work run by the scheduler |
+| **manifest** | complete JSON Lines execution input containing jobs |
+| **profile** | classification used to assign CPU and I/O resources |
+| **schedule** / **scheduler** | resource-aware job ordering / mechanism that manages it |
+| **staging** | ownership-marked work area used before an output is finalized |
+| **result** / **summary** | per-job outcome record / final aggregate record for the run |
+| **allowlist** | fields that external filters may edit |
+| **CPU token** | unit of per-job CPU and thread demand under the configured budget |
+| **I/O token** / **I/O slot** | unit of per-job I/O demand / unit of run-wide I/O capacity |
+
 ## 1. Minimum requirements for safe use
 
 1. Use `arcshuttle` for new work. Use `parxtract` only for compatibility with the extraction-only 0.1 syntax.
