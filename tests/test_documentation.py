@@ -163,7 +163,7 @@ def test_command_manual_covers_safety_compatibility_and_automation_contracts(
     required_terms += (
         ("schema v2", "schema v1", "multi-source", "CPU token")
         if manual.name.endswith(".en.md")
-        else ("スキーマv2", "スキーマv1", "複数入力元", "CPUトークン")
+        else ("スキーマv2", "スキーマv1", "複数の`source`", "`CPU token`")
     )
     folded_text = text.casefold()
     missing = [term for term in required_terms if term.casefold() not in folded_text]
@@ -191,7 +191,7 @@ def test_command_manual_defines_powershell_output_and_persistence_contracts(
     required_terms += (
         ("display formatting", "output collision")
         if manual.name.endswith(".en.md")
-        else ("表示形式", "出力先の衝突")
+        else ("表示形式", "`destination`の衝突")
     )
     assert [term for term in required_terms if term not in text] == []
     duplicate_term = "duplicate" if manual.name.endswith(".en.md") else "重複"
@@ -240,7 +240,7 @@ def test_command_manual_defines_automatic_io_resolution_contract(manual: Path) -
     required_terms += (
         ("unknown = 2", "source", "destination", "stderr")
         if manual.name.endswith(".en.md")
-        else ("不明 = 2", "入力元", "出力先", "標準エラー出力")
+        else ("不明 = 2", "`source`", "`destination`", "標準エラー出力")
     )
 
     assert [term for term in required_terms if term not in text] == []
@@ -251,7 +251,7 @@ def test_command_manual_defines_automatic_io_resolution_contract(manual: Path) -
     (ROOT / "docs" / "COMMAND_MANUAL.ja.md", ROOT / "docs" / "INSTALLATION.ja.md"),
     ids=("command", "installation"),
 )
-def test_japanese_manual_prose_does_not_use_bare_english_common_terms(
+def test_japanese_manual_prose_does_not_use_unformatted_english_terms(
     document: Path,
 ) -> None:
     prose = _markdown_prose(document)
@@ -301,6 +301,8 @@ def test_japanese_manual_prose_does_not_use_bare_english_common_terms(
         "result",
         "root",
         "run",
+        "schedule",
+        "scheduler",
         "schema",
         "session",
         "source",
@@ -308,6 +310,7 @@ def test_japanese_manual_prose_does_not_use_bare_english_common_terms(
         "stderr",
         "stdout",
         "stream",
+        "summary",
         "tagged",
         "text",
         "thread",
@@ -326,6 +329,30 @@ def test_japanese_manual_prose_does_not_use_bare_english_common_terms(
     ]
 
     assert found == []
+
+
+def test_japanese_command_manual_marks_arcshuttle_concepts_as_code() -> None:
+    text = (ROOT / "docs" / "COMMAND_MANUAL.ja.md").read_text(encoding="utf-8")
+    concepts = (
+        "operation",
+        "source",
+        "destination",
+        "inventory",
+        "job",
+        "manifest",
+        "profile",
+        "schedule",
+        "scheduler",
+        "staging",
+        "result",
+        "summary",
+        "allowlist",
+        "CPU token",
+        "I/O token",
+        "I/O slot",
+    )
+
+    assert [concept for concept in concepts if f"`{concept}`" not in text] == []
 
 
 def test_readme_covers_stable_project_entrypoint_contracts() -> None:
