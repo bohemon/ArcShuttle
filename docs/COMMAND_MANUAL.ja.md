@@ -123,7 +123,7 @@ sizeは非負整数に二進接尾辞`K`、`M`、`G`、`T`、`P`、`E`を付け�
 
 ## 5. 圧縮作成契約
 
-圧縮第1版は入力source 1件ごとに独立archive 1個を作る。複数inputを1 archiveへ結合しない。将来は明示的なmulti-source manifestとして追加し得る。
+作成は入力source 1件ごとに独立archive 1個を作る。複数inputを1 archiveへ結合しない。
 
 | Source | 既定destination | Archive rootへ格納するもの |
 |---|---|---|
@@ -132,20 +132,19 @@ sizeは非負整数に二進接尾辞`K`、`M`、`G`、`T`、`P`、`E`を付け�
 
 `--output-dir DIR`は各既定archive名を`DIR`直下へ置く。`--format zip`はsuffixを`.zip`にする。levelは0–9、計画methodは7zがLZMA2、zipがDeflateである。level 0は圧縮せずstoreする。利用者の任意raw 7-Zip optionは受け付けない。
 
-planは正規化相対path、entry kind、通常file size、nanosecond mtimeを再帰inventoryし、通常file合計size、file数、directory数、最新mtime、決定的digest、source identityを記録する。実行直前に再inventoryする。identity変更は既定で失敗し、`--allow-changed`はmetadata/content集合の変更だけを警告付きで許可する。source kind変更や非通常entryは許可しない。
+planは決定的なinventoryとsource identityを記録し、実行直前に再inventoryする。identity変更は既定で失敗し、`--allow-changed`は安全なmetadataまたはcontent集合の変更だけを警告付きで許可する。source kind変更や非通常entryは許可しない。
 
 destination、staging、log rootがdirectory source内部へ入る構成は禁止する。名前除外ではなく、正規化・解決したpath関係で判定する。
 
 作成job分類:
 
-| 条件 | Profile | CPU token/thread | 理由 |
-|---|---|---:|---|
-| sizeが`small_threshold`未満 | `small` | 1 | `create-below-small-threshold` |
-| smallでなくlevel 0 | `heavy-serial` | 1 | `create-store-mode` |
-| その他の7z | `heavy-scalable` | `min(heavy_threads,cpu_budget)` | `create-7z-lzma2` |
-| その他のzip | `heavy-scalable` | `min(heavy_threads,cpu_budget)` | `create-zip-deflate` |
+| 条件 | Profile | CPU token/thread |
+|---|---|---:|
+| sizeが`small_threshold`未満 | `small` | 1 |
+| smallでなくlevel 0 | `heavy-serial` | 1 |
+| その他の7zまたはzip作成 | `heavy-scalable` | `min(heavy_threads,cpu_budget)` |
 
-CPU tokenと`-mmt=N`はmemoryを厳密に制限しない。LZMA2のmemory使用量はdictionaryやmethod設定にも依存する。ArcShuttle 0.3.1はmemory tokenや動的memory controllerを持たない。
+CPU tokenと`-mmt=N`はmemoryを厳密に制限せず、LZMA2のmemory使用量はdictionaryやmethod設定にも依存する。
 
 ## 6. 展開契約
 
@@ -179,23 +178,12 @@ sevenzip = "C:/Program Files/7-Zip/7z.exe"
 output_dir = "D:/ArcShuttleOutput"
 existing = "rename"
 cpu_budget = 8
-max_processes = 4
-storage_profile = "ssd"
-io_slots = 2
-heavy_threads = 4
-small_threshold = "64M"
-inspect_threshold = "64M"
-inspect_timeout = 30
-reservation_delay = 30
-sequential_if_total_below = 0
-log_dir = "D:/ArcShuttleLogs"
-quiet = false
-fail_fast = false
-allow_changed = false
-on_input_error = "fail"
+storage_profile = "auto"
 create_format = "7z"
 compression_level = 5
 ```
+
+対応する全設定keyと環境変数aliasは次の表に示す。省略したkeyには4章の既定値を使う。
 
 | TOML key | 新環境変数 | 旧環境変数 |
 |---|---|---|
@@ -234,11 +222,9 @@ running_jobs     <= max_processes
 sum(io_tokens)  <= io_slots
 ```
 
-順序はpriority降順、profile順位（`heavy-scalable`、`heavy-serial`、`small`）、estimated weight降順、plan indexである。queue先頭が入らない間は、収まる後続jobをbackfillできる。先頭が`reservation_delay`待つと新規backfillを止め、実行可能になるまで資源を予約する。
+scheduleはpriority、profile、estimated weight、plan indexを考慮する。収まる後続jobは空き資源を利用できるが、`reservation_delay`後はqueue先頭へ資源を予約してstarvationを防ぐ。
 
-`storage_profile = "auto"`かつ`--io-slots`が明示されていない場合、`run`、`extract`、`create`は実行直前に、検証済みmanifestの全sourceとdestinationを調べる。capacity対応はHDD = 1、SSD = 2、NVMe = 4、unknown = 2 I/O slotである。同一device上のpathは重複排除し、全endpointのうち最小のcapacityを採用し、`max_processes`を上限とする。未対応storage、metadata取得不能、permission failure、その他の判定失敗はunknownの2 slot fallbackを使い、実行自体は妨げない。有効値と理由は`--quiet`がなければdiagnosticとしてstderrへ出力する。
-
-単独の`plan`はstorageをprobeせず、hardware固有の予算をmanifestへ永続化しない。そのため同じplanを別machineへ移して利用でき、判定は実行するprocessが担う。明示的な`--io-slots`が最優先であり、判定を迂回する。`--storage-profile hdd`、`ssd`、`nvme`が明示された場合も判定を迂回し、固定profile既定値を使う。CLI、環境変数、TOML設定のどこから指定した場合も同じ優先順位である。
+`storage_profile = "auto"`かつ`--io-slots`が明示されていない場合、`run`、`extract`、`create`は実行直前に検証済みsourceとdestinationのdeviceを調べる。capacity対応はHDD = 1、SSD = 2、NVMe = 4、unknown = 2 I/O slotであり、重複しないdeviceのうち最小値を採用して`max_processes`を上限とする。判定失敗はunknown fallbackを使い、実行を妨げない。単独の`plan`はstorageをprobeしないため、manifestは別machineへ移せる。明示的な`--io-slots`を最優先し、明示的な`hdd`、`ssd`、`nvme` profileは固定既定値を使う。有効値と理由は`--quiet`がなければstderrへ出力する。
 
 `--fail-fast`はfailed result後の新規startを止め、実行中jobを完了させ、未開始jobをskippedにする。割り込みは新規startを止め、管理child process groupへ通知し、安全に待機/終了してinterruptedを返す。v2 resultの最終出力順は完了順でなく決定的なplan順である。
 
@@ -318,15 +304,11 @@ v1 extract jobとv2 jobを同一manifestへ混在できる。v2 inputが1件で�
 
 作成は次の順序を厳守する。
 
-1. unsafeなsource/destination/log関係を拒否する。
-2. 再inventoryしてsource identityを比較する。
-3. 上書きせず`--existing`を解決する。
-4. 最終archiveの隣にprivateな所有marker付きstaging directoryを作る。
-5. 制御working directory、相対source引数、閉じたstdin、引数配列、`shell=False`で`7z a`を実行する。
-6. create終了0と通常staged archiveを必須にする。
-7. `7z t`を実行し、verification終了0を必須にする。
-8. destination不存在を再確認し、既存pathをclobberせず原子的に公開する。
-9. 所有確認した空stagingだけを削除する。
+1. path関係、source identity、非破壊の`--existing` policyを検証する。
+2. destinationの隣にprivateな所有marker付きstaging directoryを作る。
+3. 引数配列、`shell=False`、閉じたstdin、制御working directoryで`7z a`を実行する。
+4. 通常staged archiveと`7z t`の成功を必須にする。
+5. destination不存在を再確認して原子的に公開し、所有確認した空stagingだけを削除する。
 
 create/testのwarning、failure、interruption、commit前問題ではstagingを`.failed`として保持する。sourceを移動・変更・削除しない。
 
@@ -373,7 +355,7 @@ Get-ChildItem C:\Archives -File |
 
 PowerShell parameterは名前対応する:`-ArcShuttleCommand`、`-SevenZip`/`-7z`、`-OutputDir`、`-Existing`、`-CpuBudget`、`-MaxProcesses`、`-StorageProfile`、`-IoSlots`、`-HeavyThreads`、`-SmallThreshold`、`-InspectThreshold`、`-InspectTimeout`、`-ReservationDelay`、`-SequentialIfTotalBelow`、`-LogDir`、`-Config`、`-OnInputError`、`-Quiet`、`-FailFast`、`-AllowChanged`。create plan/combined functionは`-Format`と`-Level`も受ける。
 
-moduleはBOMなしUTF-8 NUL入力またはJSON Linesを一時fileへ書き、native CLI stdoutだけを`ConvertFrom-Json`し、PowerShell success streamへ`PSCustomObject` recordだけを出力し、`$LASTEXITCODE`を保持し、`finally`で一時fileを削除する。native CLIの進捗と診断はcommand実行中にstderrへリアルタイム転送し、終了後にbufferをまとめて再生しない。`-Quiet`はcore CLIが対応する進捗、version、自動I/O判定の診断を抑制するが、warningとerrorは引き続きstderrへ出る。
+moduleはPowerShell success streamへ`PSCustomObject` recordだけを出力し、`$LASTEXITCODE`を保持して一時fileを削除する。native CLIの進捗と診断はstderrへリアルタイム転送する。`-Quiet`は対応する情報診断を抑制するが、warningとerrorは引き続きstderrへ出る。
 
 純粋なobject pipelineではstreamを分離する。明示的な`2>&1`はPowerShell error streamをsuccess streamへredirectするため、診断の`ErrorRecord`と成功出力の`PSCustomObject`が意図的に混在する:
 
@@ -387,12 +369,13 @@ Get-ChildItem C:\Archives -File |
 
 ### 11.1 出力contractと永続化
 
-native CLIとPowerShell moduleは意図的に異なるsurfaceを公開する:
+出力surfaceに応じて永続化方法を選ぶ:
 
 | Surface | Success出力 | 主な用途 |
 |---|---|---|
-| `arcshuttle plan` / `parxtract plan` | canonical UTF-8 JSON Lines | portable manifest、永続保存、連結、PowerShell以外のtool |
-| `Invoke-ArcShuttle*Plan` / `Invoke-ParxtractPlan` | `PSCustomObject` record | PowerShellでの確認、編集、変数保持、object pipeline |
+| `arcshuttle plan` / `parxtract plan` | canonical UTF-8 JSON Lines | portable manifest fileとPowerShell以外のtool |
+| `Invoke-ArcShuttle*Plan` / `Invoke-ParxtractPlan` | `PSCustomObject` record | 同一session内のPowerShell object pipeline |
+| `Export-Clixml` / `Import-Clixml` | PowerShell object snapshot | PowerShell専用のsession間保存 |
 
 同一PowerShell session内でplanして実行する場合はobjectのまま扱う:
 
@@ -406,70 +389,37 @@ $plans | Select-Object plan_index, operation, source, destination
 $plans | Invoke-ArcShuttleRun
 ```
 
-file拡張子はserializerを選択しない。次のcommandはPowerShell display formattingを起動し、manifestを作成**しない**:
+file拡張子はserializerを選択しない。plan objectをredirectするとPowerShell display formattingが起動し、manifestを作成**しない**:
 
 ```powershell
 # 無効な永続化: file内容はJSON Linesではなく、情報を失ったdisplay formattingとなる。
 Get-ChildItem C:\Archives -File |
     Invoke-ArcShuttleExtractPlan > extract.jsonl
-Get-ChildItem C:\Sources -Directory |
-    Invoke-ArcShuttleCreatePlan > create.jsonl
-Get-ChildItem C:\Archives -File |
-    Invoke-ParxtractPlan > legacy.jsonl
 ```
 
-`name : value`、`@{...}`、`System.Object[]`のようなtextから安全に復元することはできない。このfileを`run`へ渡したり修復を試みたりせず、sourceから再planする。
+このfileを`run`へ渡したり修復を試みたりせず、sourceから再planする。
 
 canonical JSON Linesが必要な場合はPowerShellからnative CLIを使う:
 
 ```powershell
-$archives = @(
-    Get-ChildItem C:\Archives -File |
-        Select-Object -ExpandProperty FullName
-)
-$sources = @(
-    Get-ChildItem C:\Sources |
-        Select-Object -ExpandProperty FullName
-)
-
+$archives = @(Get-ChildItem C:\Archives -File | Select-Object -ExpandProperty FullName)
 arcshuttle plan extract -- $archives > extract.jsonl
-arcshuttle plan create --format 7z -- $sources > create.jsonl
-parxtract plan -- $archives > legacy-extract.jsonl
-
 Get-Content -LiteralPath .\extract.jsonl |
     ConvertFrom-Json -Depth 100 |
     Select-Object plan_index, operation, source, destination
-
-arcshuttle run --manifest .\extract.jsonl > results.jsonl
 ```
 
-native command lineの上限を超えるpath集合には、3章のCLI `--files0-from`入力を使う。
+native command lineの上限を超えるpath集合には、3章の`--files0-from`を使う。有効なJSON Lines fileはrecord streamとして連結できる。ArcShuttleは結合manifest全体を検証し、重複する`job_id`とoutput collisionを拒否する。独立したplan間では`plan_index`が重複してもよい。`plan_index`は`integrity`で保護されるため、連番へ振り直してはならない。
 
-有効なJSON Lines manifestはrecord streamであり、PowerShell objectへparseせずに結合できる:
-
-```powershell
-Get-Content -LiteralPath .\extract-a.jsonl, .\extract-b.jsonl |
-    Set-Content -LiteralPath .\combined.jsonl -Encoding utf8NoBOM
-
-arcshuttle run --manifest .\combined.jsonl > results.jsonl
-```
-
-各入力fileは、空白でない物理行ごとに完全なJSON objectを1つだけ含む必要がある。ArcShuttleはjob開始前に結合manifest全体を検証する。重複する`job_id`とoutput collisionは拒否する。独立したplan間では`plan_index`が重複してもよい。`plan_index`は`integrity`で保護されるため、連番へ振り直してはならない。
-
-PowerShell専用のsession間snapshotには、CLIXMLでobjectを明示的にserializeする:
+PowerShell専用のsession間snapshotにはCLIXMLを明示的に使う:
 
 ```powershell
-$planA | Export-Clixml -LiteralPath .\plan-a.clixml -Depth 100
-$planB | Export-Clixml -LiteralPath .\plan-b.clixml -Depth 100
-
-$plans = @(
-    Import-Clixml -LiteralPath .\plan-a.clixml
-    Import-Clixml -LiteralPath .\plan-b.clixml
-)
+$plans | Export-Clixml -LiteralPath .\plans.clixml -Depth 100
+$plans = @(Import-Clixml -LiteralPath .\plans.clixml)
 $plans | Invoke-ArcShuttleRun
 ```
 
-同じpatternを`Invoke-ParxtractPlan`と`Invoke-ParxtractRun`にも使える。CLIXMLはPowerShell object snapshotであり、ArcShuttle manifestではない。`arcshuttle run --manifest`は受理せず、完全なCLIXML documentをraw textとして連結することもできない。各snapshotをimportし、得られたobject listを結合する。deserialize後のobjectはrun commandに必要なmanifest data propertyを保持するが、元のmethodを持つlive objectではなくsnapshotである。
+同じpatternを`Invoke-ParxtractPlan`と`Invoke-ParxtractRun`にも使える。CLIXMLはArcShuttle manifestではなく、`arcshuttle run --manifest`は受理しない。複数snapshotはraw CLIXMLを連結せず、import後のobject listを結合する。
 
 ## 12. POSIX例
 
@@ -489,29 +439,18 @@ shell pipeline全体のstatusが必要なら`set -o pipefail`を使う。ただ�
 
 ## 13. parxtract 0.1からの移行
 
-- 配布名`arcshuttle`をinstallする。両console scriptを含む。
-- schema-v2計画へ移るとき`parxtract plan ...`を`arcshuttle plan extract ...`へ変更する。
-- 準備できたら`parxtract extract ...`を`arcshuttle extract ...`へ変更する。互換commandも動作を維持する。
-- 既存schema-v1 manifestは引き続き受理し、内部でextract jobへ変換する。
-- 新primary planはoperation/source/destination identity/integrityを持つschema v2を出す。
-- `ARCSHUTTLE_*`を優先して使う。新旧の対応変数が同時指定なら新名称を優先する。
-- `[arcshuttle]`を優先する。`[parxtract]`とroot-level値を上書きする。
-- create fieldにlegacy環境変数/TOML aliasはない。
-- 既存`.parxtract` dataは移行、改名、所有、削除しない。手動確認し、ArcShuttleは新しい`.arcshuttle`名へ書く。
-- 新PowerShell workflowは`ArcShuttle.psm1`をimportする。`Parxtract.psm1`は互換維持する。
+- 配布名`arcshuttle`は両console scriptを含む。新しいCLIとPowerShell workflowでは`arcshuttle`を使う。
+- 既存の`parxtract` command、互換module、schema-v1 manifestは展開用途で引き続き利用できる。
+- `ARCSHUTTLE_*`と`[arcshuttle]`を優先する。新名称が優先され、作成設定にlegacy aliasはない。
+- 既存`.parxtract` dataは移行、改名、所有、削除しない。ArcShuttleは新しい`.arcshuttle` pathへ書く。
 
 ## 14. AIエージェント手順
 
-1. plan前に`arcshuttle --version`、7-Zip利用可否、operation、出力formatを確認する。
-2. 自動生成・任意文字pathにはNUL入力を使う。暗黙stdinを想定しない。
-3. 作成では各sourceが独立archiveになる意図と、output/log rootがdirectory source外であることを確認する。
-4. stdout/stderrを分離し、stdoutをEOFまでJSON Lines解析する。
-5. 全plan recordが意図したoperationの`job`で、destinationが一意か確認する。
-6. filter時はv2 allowlistだけを変更する。`integrity`を再生成せず、source/archive/inventory/I/O fieldを変更しない。
-7. 完全streamを1つの`run` processへ渡し、資源上限をglobalに保つ。
-8. 全resultと最後のsummaryを読み、status、warning、process終了を合わせて判定する。
-9. nullでない`staging_path`と`log_path`を報告し、保持物を自動削除しない。
-10. password/raw 7-Zip option注入、既存出力削除、source変更、拒否link追跡、外部overwrite回避をしない。
+1. plan前にversion、7-Zip利用可否、operation、出力format、安全なdestinationを確認する。自動生成・任意文字pathにはNUL入力を使う。
+2. stdout/stderrを分離し、全plan `job`のoperationとdestination一意性を確認する。
+3. filter時はv2 allowlistだけを変更する。`integrity`を再生成せず、保護されたsource、archive、inventory、I/O fieldを変更しない。
+4. 完全streamを1つの`run` processへ渡し、stdoutをEOFまで読み、全result、最後のsummary、process終了を合わせて判定する。
+5. nullでない`staging_path`と`log_path`を報告する。保持物を削除せず、source変更、拒否link追跡、overwrite保護の迂回を行わない。
 
 機械判定概要:
 
@@ -528,11 +467,9 @@ else:
     else: outcome = success
 ```
 
-## 15. 依存policy・制限・troubleshooting
+## 15. 制限・troubleshooting
 
-install packageは意図的にthird-party runtime dependencyを持たない。標準libraryによるpath、TOML、JSON、hash、scheduling、process safety実装を監査可能に保つ。Hatch development環境だけが`pytest`、`pytest-timeout`、Ruffを使い、test分離、timeout、lint、formatの明確なCI価値を得る。
-
-圧縮第1版は1 source/1 archive、7z/zip、level 0–9、通常entry、local非分割出力だけを扱う。multi-source archive、分割作成、暗号化作成、password、nested再帰処理、raw method調整、実行中資源再配分、disk自動判定、memory予算、GUI、watch serviceは対象外である。
+作成は1 source/1 archive、7z/zip、level 0–9、通常entry、local非分割出力を扱う。multi-source、分割、暗号化作成、password入力、raw method調整、厳密なmemory予算、GUI、watch serviceは対応しない。
 
 | 症状 | 確認 | 安全な対処 |
 |---|---|---|

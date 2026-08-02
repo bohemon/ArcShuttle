@@ -85,6 +85,9 @@ def test_current_version_is_aligned_across_documentation_and_modules() -> None:
         text = guide.read_text(encoding="utf-8")
         assert f"releases/download/v{__version__}/{wheel_name}" in text
         assert f"git@v{__version__}" in text
+        assert f"$removeVersion = '{__version__}'" in text
+        assert "ArcShuttle/$removeVersion" in text
+        assert "Parxtract/$removeVersion" in text
     for manifest in POWERSHELL_MANIFESTS:
         text = manifest.read_text(encoding="utf-8")
         assert f"ModuleVersion = '{__version__}'" in text
@@ -109,6 +112,7 @@ def test_installation_guides_cover_clone_free_and_verified_installation(guide: P
         "Test-ModuleManifest",
         "Import-Module ArcShuttle",
         "Import-Module Parxtract",
+        "-RequiredVersion $version",
         "Invoke-Expression",
     )
     assert [term for term in required_terms if term not in text] == []
@@ -145,14 +149,15 @@ def test_command_manual_covers_safety_compatibility_and_automation_contracts(
         "create.stdout.log",
         ".arcshuttle-owned",
         ".parxtract",
-        "multi-source manifest",
+        "multi-source",
         "Invoke-ArcShuttleCreatePlan",
         "Invoke-ParxtractPlan",
         "stdout",
         "stderr",
         "CPU token",
     )
-    missing = [term for term in required_terms if term not in text]
+    folded_text = text.casefold()
+    missing = [term for term in required_terms if term.casefold() not in folded_text]
     assert missing == []
 
 
@@ -165,11 +170,7 @@ def test_command_manual_defines_powershell_output_and_persistence_contracts(
         "PSCustomObject",
         "display formatting",
         "Invoke-ArcShuttleExtractPlan >",
-        "Invoke-ArcShuttleCreatePlan >",
-        "Invoke-ParxtractPlan >",
         "arcshuttle plan extract --",
-        "arcshuttle plan create --format",
-        "parxtract plan --",
         "ConvertFrom-Json",
         "Export-Clixml",
         "Import-Clixml",
@@ -181,8 +182,16 @@ def test_command_manual_defines_powershell_output_and_persistence_contracts(
         "Invoke-ParxtractRun",
     )
     assert [term for term in required_terms if term not in text] == []
-    duplicate_term = "Duplicate" if manual.name.endswith(".en.md") else "重複"
-    assert duplicate_term in text
+    duplicate_term = "duplicate" if manual.name.endswith(".en.md") else "重複"
+    assert duplicate_term in text.casefold()
+
+
+@pytest.mark.parametrize("manual", MANUALS, ids=("en", "ja"))
+def test_command_manual_does_not_claim_storage_detection_is_unsupported(manual: Path) -> None:
+    text = manual.read_text(encoding="utf-8")
+
+    assert "disk auto-detection" not in text
+    assert "disk自動判定" not in text
 
 
 @pytest.mark.parametrize("manual", MANUALS, ids=("en", "ja"))

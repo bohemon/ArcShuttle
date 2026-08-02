@@ -1,7 +1,8 @@
 # ArcShuttle インストールガイド
 
-このガイドでは、sourceをcheckoutせずにArcShuttleをinstallする。commandはv0.3.1へ固定し、
-`main`が変更されてもinstall結果が変わらないようにする。
+このガイドは、sourceをcheckoutしない安定したend-user installを中心に説明する。commandは
+v0.3.1へ固定し、`main`が変更されてもinstall結果が変わらないようにする。tagged sourceからの
+installと開発用checkoutは、別の選択肢として後半に示す。
 
 ## 必要環境
 
@@ -44,7 +45,7 @@ OSが管理するPython環境を直接変更せず、virtual environmentを使�
 新しいRelease wheelへ更新する場合はURL中のversionを変更してcommandへ`--upgrade`を追加する。
 削除は`python -m pip uninstall arcshuttle`で行う。
 
-### Gitからのinstall
+### 代替: tagged sourceからのinstall
 
 Release wheelが適さず、再現可能なsource installが必要な場合はtagまたはcommitを指定する:
 
@@ -93,13 +94,19 @@ Get-Command -Module ArcShuttle
 
 PowerShell moduleはPythonや7-Zipを同梱せず`arcshuttle` CLIを呼び出すため、CLIも`PATH`上に
 必要となる。互換moduleが必要な場合は
-`Import-Module Parxtract -RequiredVersion 0.3.1`でimportする。
+`Import-Module Parxtract -RequiredVersion $version`でimportする。
 
 moduleを削除する場合は、利用中のsessionを閉じ、次のversion directoryだけを削除する:
 
 ```powershell
-Remove-Item -LiteralPath (Join-Path $moduleRoot 'ArcShuttle/0.3.1') -Recurse
-Remove-Item -LiteralPath (Join-Path $moduleRoot 'Parxtract/0.3.1') -Recurse
+$removeVersion = '0.3.1'
+if ($IsWindows) {
+    $moduleRoot = Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'PowerShell\Modules'
+} else {
+    $moduleRoot = Join-Path $HOME '.local/share/powershell/Modules'
+}
+Remove-Item -LiteralPath (Join-Path $moduleRoot "ArcShuttle/$removeVersion") -Recurse
+Remove-Item -LiteralPath (Join-Path $moduleRoot "Parxtract/$removeVersion") -Recurse
 ```
 
 更新する場合は`$version`を公開済みの新versionへ変更し、download、検証、展開を再実行する。
