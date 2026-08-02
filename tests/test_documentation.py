@@ -265,6 +265,7 @@ def test_japanese_manual_prose_does_not_use_unformatted_english_terms(
     document: Path,
 ) -> None:
     prose = _markdown_prose(document)
+    prose_without_external_terms = prose.replace("PowerShellのErrorストリーム", "")
     bare_general_terms = (
         "archive",
         "boolean",
@@ -319,7 +320,7 @@ def test_japanese_manual_prose_does_not_use_unformatted_english_terms(
         for term in bare_general_terms
         if re.search(
             rf"(?<![A-Za-z0-9_-]){re.escape(term)}(?![A-Za-z0-9_-])",
-            prose,
+            prose_without_external_terms,
             flags=re.IGNORECASE,
         )
     ]
@@ -383,6 +384,33 @@ def test_japanese_command_manual_uses_clear_operation_aware_section_titles() -> 
     )
 
     assert [term for term in required_terms if term not in text] == []
+
+
+def test_japanese_manuals_follow_external_tool_terminology() -> None:
+    command_manual = (ROOT / "docs" / "COMMAND_MANUAL.ja.md").read_text(encoding="utf-8")
+    installation_guide = (ROOT / "docs" / "INSTALLATION.ja.md").read_text(encoding="utf-8")
+
+    assert "PowerShellのSuccessストリーム" in command_manual
+    assert "PowerShellのErrorストリーム" in command_manual
+    assert "[pipx](https://pipx.pypa.io/)" in installation_guide
+    assert "pipxによる仮想環境へのインストール" in installation_guide
+    assert "GitHubリリースのwheelファイル" in installation_guide
+    assert "モジュール マニフェスト" in installation_guide
+
+    deprecated_terms = (
+        "PowerShellの成功ストリーム",
+        "PowerShellのエラーストリーム",
+        "PowerShellの`Success`ストリーム",
+        "PowerShellの`Error`ストリーム",
+        "PowerShellの*Success*ストリーム",
+        "PowerShellの*Error*ストリーム",
+        "[`pipx`](https://pipx.pypa.io/)",
+        "pipxによる分離インストール",
+        "リリース用wheelファイル",
+        "モジュールマニフェスト",
+    )
+    combined_text = command_manual + installation_guide
+    assert [term for term in deprecated_terms if term in combined_text] == []
 
 
 def test_readme_covers_stable_project_entrypoint_contracts() -> None:

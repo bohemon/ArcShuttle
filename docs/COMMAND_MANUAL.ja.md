@@ -375,9 +375,9 @@ Get-ChildItem C:\Archives -File |
 
 PowerShellでは、対応するパラメーターとして次の名前を使う：`-ArcShuttleCommand`、`-SevenZip`／`-7z`、`-OutputDir`、`-Existing`、`-CpuBudget`、`-MaxProcesses`、`-StorageProfile`、`-IoSlots`、`-HeavyThreads`、`-SmallThreshold`、`-InspectThreshold`、`-InspectTimeout`、`-ReservationDelay`、`-SequentialIfTotalBelow`、`-LogDir`、`-Config`、`-OnInputError`、`-Quiet`、`-FailFast`、`-AllowChanged`。`create`の*plan*関数と一括実行関数は、`-Format`と`-Level`も受け付ける。
 
-モジュールは、PowerShellの成功ストリームへ`PSCustomObject`レコードだけを出力し、`$LASTEXITCODE`を保持して一時ファイルを削除する。ネイティブCLIの進捗と診断は標準エラー出力へリアルタイムで転送する。`-Quiet`は対応する情報レベルの診断を抑制するが、警告とエラーは引き続き標準エラー出力へ書き込む。
+モジュールは、PowerShellのSuccessストリームへ`PSCustomObject`レコードだけを出力し、`$LASTEXITCODE`を保持して一時ファイルを削除する。ネイティブCLIの進捗と診断は標準エラー出力へリアルタイムで転送する。`-Quiet`は対応する情報レベルの診断を抑制するが、警告とエラーは引き続き標準エラー出力へ書き込む。
 
-純粋なオブジェクトパイプラインではストリームを分離する。明示的な`2>&1`はPowerShellのエラーストリームを成功ストリームへリダイレクトするため、診断の`ErrorRecord`と成功出力の`PSCustomObject`が意図的に混在する：
+純粋なオブジェクトパイプラインではストリームを分離する。明示的な`2>&1`はPowerShellのErrorストリームをSuccessストリームへリダイレクトするため、診断の`ErrorRecord`と成功出力の`PSCustomObject`が意図的に混在する：
 
 ```powershell
 # 混合出力：一体のトランスクリプトには有用だが、純粋なオブジェクトパイプラインではない。

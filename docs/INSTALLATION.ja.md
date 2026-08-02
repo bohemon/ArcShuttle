@@ -14,9 +14,9 @@
 
 ## CLIのインストール
 
-### 推奨：pipxによる分離インストール
+### 推奨：pipxによる仮想環境へのインストール
 
-[`pipx`](https://pipx.pypa.io/)はコマンドラインアプリケーションごとに分離環境を作り、
+[pipx](https://pipx.pypa.io/)はコマンドラインアプリケーションごとに仮想環境を作り、
 コマンドを`PATH`から実行できるようにする。利用するプラットフォームに合う方法でpipxを
 インストールした後、次を実行する：
 
@@ -36,7 +36,7 @@ pipx install --force "https://github.com/bohemon/ArcShuttle/releases/download/v0
 
 ### 既存の仮想環境
 
-仮想環境を有効化し、リリース用wheelファイルを直接インストールする：
+仮想環境を有効化し、GitHubリリースのwheelファイルを直接インストールする：
 
 ```sh
 python -m pip install "https://github.com/bohemon/ArcShuttle/releases/download/v0.3.1/arcshuttle-0.3.1-py3-none-any.whl"
@@ -44,13 +44,13 @@ arcshuttle --version
 ```
 
 OSが管理するPython環境を直接変更せず、仮想環境を使用する。
-新しいリリース用wheelファイルへ更新する場合は、URL中のバージョンを変更し、コマンドに
+GitHubリリースの新しいwheelファイルへ更新する場合は、URL中のバージョンを変更し、コマンドに
 `--upgrade`を追加する。
 削除は`python -m pip uninstall arcshuttle`で行う。
 
 ### 代替：タグ付きソースからのインストール
 
-リリース用wheelファイルが適さず、ソースから再現可能な形でインストールする必要がある場合は、
+GitHubリリースのwheelファイルが適さず、ソースから再現可能な形でインストールする必要がある場合は、
 タグまたはコミットを指定する：
 
 ```sh
@@ -118,7 +118,7 @@ Remove-Item -LiteralPath (Join-Path $moduleRoot "Parxtract/$removeVersion") -Rec
 
 更新する場合は、`$version`を公開済みの新しいバージョンへ変更し、ダウンロード、検証、展開を
 再実行する。PowerShellではバージョンごとに別のディレクトリへ配置されるため、新しい
-モジュールマニフェストを検証してから旧バージョンのディレクトリを削除する。
+モジュール マニフェストを検証してから旧バージョンのディレクトリを削除する。
 
 リモートインストールスクリプトを`Invoke-Expression`（`iex`）へ渡してはならない。
 成果物をダウンロードし、公開チェックサムを検証してから展開すれば、実行対象のコードを
