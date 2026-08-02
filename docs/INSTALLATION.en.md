@@ -13,10 +13,10 @@ a development checkout are listed separately as alternatives.
 
 ## Install the CLI
 
-### Recommended: isolated installation with pipx
+### Recommended: per-application virtual environment with pipx
 
-[`pipx`](https://pipx.pypa.io/) installs command-line applications into isolated environments
-and exposes their commands on `PATH`. After installing pipx for your platform, run:
+[`pipx`](https://pipx.pypa.io/) creates a dedicated virtual environment for each command-line
+application and exposes its commands on `PATH`. After installing pipx for your platform, run:
 
 ```sh
 pipx install "https://github.com/bohemon/ArcShuttle/releases/download/v0.3.1/arcshuttle-0.3.1-py3-none-any.whl"
