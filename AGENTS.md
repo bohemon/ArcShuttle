@@ -6,14 +6,12 @@ requirements below.
 
 ## Project direction
 
-- The product name is **ArcShuttle**. The target for the current roadmap is version 0.2.0.
+- The product name is **ArcShuttle**. The current release target is version 0.3.0.
 - The distribution, primary Python package, and primary CLI are all named `arcshuttle`.
 - `parxtract` remains a compatibility surface. Do not remove or silently change its CLI,
   Python-module entry point, manifest v1 support, JSON Lines contract, or exit behavior.
-- Track the 0.2.0 program in GitHub issue #3 and implement it in dependency order:
-  #4, #5, then #6 and #7, followed by #8, #9, #10, #11, and #12.
-- Until an earlier migration issue is merged, expect the working tree to contain legacy
-  `parxtract` names. Do not perform opportunistic renames outside the active issue.
+- Historical roadmap ordering is not an instruction to reopen completed issues. Track new work
+  in its own issue and follow the dependencies recorded there.
 
 ## Branching and integration
 
@@ -44,9 +42,9 @@ and do not merge it first. After the prerequisite merges, rebase the dependent b
 `main`, retarget it to `main`, and rerun all checks. After issue #5, issues #6 and #7 may run
 independently from the same updated `main`.
 
-Do not create `develop` or a long-lived 0.2.0 release branch. Tag `v0.2.0` from verified
-`main`. Add a maintenance branch such as `0.2.x` only when an older release must be supported
-in parallel with later development.
+Do not create `develop` or a long-lived release branch for an ordinary release. Tag releases
+from verified `main`. Add a maintenance branch such as `0.3.x` only when an older release must
+be supported in parallel with later development.
 
 ## Commits and pull requests
 

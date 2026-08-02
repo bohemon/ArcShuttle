@@ -6,6 +6,7 @@ import argparse
 import configparser
 import hashlib
 import os
+import runpy
 import shutil
 import subprocess
 import sys
@@ -18,7 +19,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 DIST = ROOT / "dist"
-VERSION = "0.2.0"
+VERSION = str(runpy.run_path(str(ROOT / "src" / "arcshuttle" / "__init__.py"))["__version__"])
 WHEEL_NAME = f"arcshuttle-{VERSION}-py3-none-any.whl"
 SDIST_NAME = f"arcshuttle-{VERSION}.tar.gz"
 DIST_INFO = f"arcshuttle-{VERSION}.dist-info"
@@ -279,11 +280,11 @@ def smoke_installed_wheel(wheel: Path) -> None:
         arcshuttle = installed_command(environment, "arcshuttle")
         parxtract = installed_command(environment, "parxtract")
         smoke_commands = (
-            ([str(arcshuttle), "--version"], "arcshuttle 0.2.0"),
+            ([str(arcshuttle), "--version"], f"arcshuttle {VERSION}"),
             ([str(arcshuttle), "plan", "create", "--help"], "plan create"),
             ([str(arcshuttle), "plan", "extract", "--help"], "plan extract"),
             ([str(arcshuttle), "run", "--help"], "--manifest"),
-            ([str(parxtract), "--version"], "parxtract 0.2.0"),
+            ([str(parxtract), "--version"], f"parxtract {VERSION}"),
         )
         for command, expected in smoke_commands:
             completed = checked_run(command, cwd=environment)

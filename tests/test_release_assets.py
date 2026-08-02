@@ -6,9 +6,11 @@ import sys
 import zipfile
 from pathlib import Path
 
+from arcshuttle import __version__
+
 ROOT = Path(__file__).parents[1]
 BUILDER = ROOT / "scripts" / "build_powershell_assets.py"
-VERSION = "0.2.0"
+VERSION = __version__
 ASSET_NAME = f"ArcShuttle-PowerShell-{VERSION}.zip"
 CHECKSUM_NAME = f"{ASSET_NAME}.sha256"
 EXPECTED_MEMBERS = {

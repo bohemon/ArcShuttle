@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from arcshuttle import config
+from arcshuttle import __version__, config
 from arcshuttle.cli import build_parser
 
 ROOT = Path(__file__).parents[1]
@@ -18,6 +18,10 @@ MANUALS = (
 INSTALLATION_GUIDES = (
     ROOT / "docs" / "INSTALLATION.en.md",
     ROOT / "docs" / "INSTALLATION.ja.md",
+)
+POWERSHELL_MANIFESTS = (
+    ROOT / "powershell" / "ArcShuttle.psd1",
+    ROOT / "powershell" / "Parxtract.psd1",
 )
 
 
@@ -69,6 +73,25 @@ def test_readme_links_to_packaged_manuals() -> None:
         assert guide.is_file()
 
 
+def test_current_version_is_aligned_across_documentation_and_modules() -> None:
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    wheel_name = f"arcshuttle-{__version__}-py3-none-any.whl"
+
+    assert f"releases/download/v{__version__}/{wheel_name}" in readme
+    for manual in MANUALS:
+        text = manual.read_text(encoding="utf-8")
+        assert f"applies_to_cli_version: {__version__}" in text
+    for guide in INSTALLATION_GUIDES:
+        text = guide.read_text(encoding="utf-8")
+        assert f"releases/download/v{__version__}/{wheel_name}" in text
+        assert f"git@v{__version__}" in text
+    for manifest in POWERSHELL_MANIFESTS:
+        text = manifest.read_text(encoding="utf-8")
+        assert f"ModuleVersion = '{__version__}'" in text
+        assert f"blob/v{__version__}/LICENSE" in text
+        assert f"releases/tag/v{__version__}" in text
+
+
 @pytest.mark.parametrize("guide", INSTALLATION_GUIDES, ids=("en", "ja"))
 def test_installation_guides_cover_clone_free_and_verified_installation(guide: Path) -> None:
     text = guide.read_text(encoding="utf-8")
@@ -77,8 +100,8 @@ def test_installation_guides_cover_clone_free_and_verified_installation(guide: P
         "python -m pip install",
         "--upgrade",
         "python -m pip uninstall arcshuttle",
-        "arcshuttle-0.2.0-py3-none-any.whl",
-        "git+https://github.com/bohemon/ArcShuttle.git@v0.2.0",
+        f"arcshuttle-{__version__}-py3-none-any.whl",
+        f"git+https://github.com/bohemon/ArcShuttle.git@v{__version__}",
         "ArcShuttle-PowerShell-$version.zip",
         '$checksumFile = "$archive.sha256"',
         "Get-FileHash",

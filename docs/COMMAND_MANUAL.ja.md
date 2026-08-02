@@ -2,7 +2,7 @@
 title: ArcShuttle コマンド・オプションマニュアル
 language: ja
 manual_version: 2
-applies_to_cli_version: 0.2.0
+applies_to_cli_version: 0.3.0
 jsonl_schema_version: 2
 audience:
   - human
@@ -18,7 +18,7 @@ source_of_truth:
 
 # ArcShuttle コマンド・オプションマニュアル
 
-本書はArcShuttle 0.2.0を操作する人間およびAIエージェント向けの規範的リファレンスである。「必須」「禁止」「のみ許可」は安全上の要件を表す。stdoutはプロセスの標準出力バイト列、stderrは標準エラーを意味する。
+本書はArcShuttle 0.3.0を操作する人間およびAIエージェント向けの規範的リファレンスである。「必須」「禁止」「のみ許可」は安全上の要件を表す。stdoutはプロセスの標準出力バイト列、stderrは標準エラーを意味する。
 
 ## 1. 最小安全契約
 
@@ -145,7 +145,7 @@ destination、staging、log rootがdirectory source内部へ入る構成は禁�
 | その他の7z | `heavy-scalable` | `min(heavy_threads,cpu_budget)` | `create-7z-lzma2` |
 | その他のzip | `heavy-scalable` | `min(heavy_threads,cpu_budget)` | `create-zip-deflate` |
 
-CPU tokenと`-mmt=N`はmemoryを厳密に制限しない。LZMA2のmemory使用量はdictionaryやmethod設定にも依存する。ArcShuttle 0.2.0はmemory tokenや動的memory controllerを持たない。
+CPU tokenと`-mmt=N`はmemoryを厳密に制限しない。LZMA2のmemory使用量はdictionaryやmethod設定にも依存する。ArcShuttle 0.3.0はmemory tokenや動的memory controllerを持たない。
 
 ## 6. 展開契約
 

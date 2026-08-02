@@ -2,7 +2,7 @@
 title: ArcShuttle Command and Option Manual
 language: en
 manual_version: 2
-applies_to_cli_version: 0.2.0
+applies_to_cli_version: 0.3.0
 jsonl_schema_version: 2
 audience:
   - human
@@ -18,7 +18,7 @@ source_of_truth:
 
 # ArcShuttle command and option manual
 
-This is the normative human/AI reference for ArcShuttle 0.2.0. “Must,” “must not,” and “may only” describe requirements. Stdout means the process standard-output byte stream; stderr means standard error.
+This is the normative human/AI reference for ArcShuttle 0.3.0. “Must,” “must not,” and “may only” describe requirements. Stdout means the process standard-output byte stream; stderr means standard error.
 
 ## 1. Minimum safe contract
 
@@ -145,7 +145,7 @@ Create scheduling:
 | other 7z | `heavy-scalable` | `min(heavy_threads,cpu_budget)` | `create-7z-lzma2` |
 | other zip | `heavy-scalable` | `min(heavy_threads,cpu_budget)` | `create-zip-deflate` |
 
-CPU tokens and `-mmt=N` do not strictly bound memory. LZMA2 memory use also depends on dictionary and method settings. ArcShuttle 0.2.0 has no memory-token or dynamic-memory controller.
+CPU tokens and `-mmt=N` do not strictly bound memory. LZMA2 memory use also depends on dictionary and method settings. ArcShuttle 0.3.0 has no memory-token or dynamic-memory controller.
 
 ## 6. Extraction contract
 

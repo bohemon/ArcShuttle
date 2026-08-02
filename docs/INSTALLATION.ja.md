@@ -1,6 +1,6 @@
 # ArcShuttle インストールガイド
 
-このガイドでは、sourceをcheckoutせずにArcShuttleをinstallする。commandはv0.2.0へ固定し、
+このガイドでは、sourceをcheckoutせずにArcShuttleをinstallする。commandはv0.3.0へ固定し、
 `main`が変更されてもinstall結果が変わらないようにする。
 
 ## 必要環境
@@ -18,7 +18,7 @@
 公開する。platformに合う方法でpipxをinstallした後、次を実行する:
 
 ```sh
-pipx install "https://github.com/bohemon/ArcShuttle/releases/download/v0.2.0/arcshuttle-0.2.0-py3-none-any.whl"
+pipx install "https://github.com/bohemon/ArcShuttle/releases/download/v0.3.0/arcshuttle-0.3.0-py3-none-any.whl"
 arcshuttle --version
 parxtract --version
 ```
@@ -26,7 +26,7 @@ parxtract --version
 この固定releaseをupgradeまたは再installする:
 
 ```sh
-pipx install --force "https://github.com/bohemon/ArcShuttle/releases/download/v0.2.0/arcshuttle-0.2.0-py3-none-any.whl"
+pipx install --force "https://github.com/bohemon/ArcShuttle/releases/download/v0.3.0/arcshuttle-0.3.0-py3-none-any.whl"
 ```
 
 削除は`pipx uninstall arcshuttle`で行う。
@@ -36,7 +36,7 @@ pipx install --force "https://github.com/bohemon/ArcShuttle/releases/download/v0
 environmentをactivateし、Release wheelを直接installする:
 
 ```sh
-python -m pip install "https://github.com/bohemon/ArcShuttle/releases/download/v0.2.0/arcshuttle-0.2.0-py3-none-any.whl"
+python -m pip install "https://github.com/bohemon/ArcShuttle/releases/download/v0.3.0/arcshuttle-0.3.0-py3-none-any.whl"
 arcshuttle --version
 ```
 
@@ -49,7 +49,7 @@ OSが管理するPython環境を直接変更せず、virtual environmentを使�
 Release wheelが適さず、再現可能なsource installが必要な場合はtagまたはcommitを指定する:
 
 ```sh
-pipx install "arcshuttle @ git+https://github.com/bohemon/ArcShuttle.git@v0.2.0"
+pipx install "arcshuttle @ git+https://github.com/bohemon/ArcShuttle.git@v0.3.0"
 ```
 
 既存virtual environmentでは`pipx install`を`python -m pip install`へ置き換える。`@main`の
@@ -57,12 +57,12 @@ installは未releaseの変更へ追従するため、安定したend-user instal
 
 ## PowerShell moduleのinstall
 
-v0.2.0 Releaseには`ArcShuttle`と互換用`Parxtract` moduleの両方が含まれる。次の
+v0.3.0 Releaseには`ArcShuttle`と互換用`Parxtract` moduleの両方が含まれる。次の
 PowerShell 7 commandはarchiveとchecksumをdownloadし、検証してからCurrentUser用のversion付き
 module directoryへinstallする。downloadしたtextを実行することはない。
 
 ```powershell
-$version = '0.2.0'
+$version = '0.3.0'
 $release = "https://github.com/bohemon/ArcShuttle/releases/download/v$version"
 $assetName = "ArcShuttle-PowerShell-$version.zip"
 $downloadDir = Join-Path ([System.IO.Path]::GetTempPath()) "ArcShuttle-$version"
@@ -93,13 +93,13 @@ Get-Command -Module ArcShuttle
 
 PowerShell moduleはPythonや7-Zipを同梱せず`arcshuttle` CLIを呼び出すため、CLIも`PATH`上に
 必要となる。互換moduleが必要な場合は
-`Import-Module Parxtract -RequiredVersion 0.2.0`でimportする。
+`Import-Module Parxtract -RequiredVersion 0.3.0`でimportする。
 
 moduleを削除する場合は、利用中のsessionを閉じ、次のversion directoryだけを削除する:
 
 ```powershell
-Remove-Item -LiteralPath (Join-Path $moduleRoot 'ArcShuttle/0.2.0') -Recurse
-Remove-Item -LiteralPath (Join-Path $moduleRoot 'Parxtract/0.2.0') -Recurse
+Remove-Item -LiteralPath (Join-Path $moduleRoot 'ArcShuttle/0.3.0') -Recurse
+Remove-Item -LiteralPath (Join-Path $moduleRoot 'Parxtract/0.3.0') -Recurse
 ```
 
 更新する場合は`$version`を公開済みの新versionへ変更し、download、検証、展開を再実行する。

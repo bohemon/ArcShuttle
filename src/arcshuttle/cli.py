@@ -9,6 +9,7 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Any, TextIO
 
+from . import __version__
 from .config import Config, resolve_config
 from .input import collect_paths, normalize_paths
 from .manifest import validate_manifest
@@ -79,7 +80,7 @@ def build_parser(
         prog=program_name,
         description="Resource-aware archive creation and extraction backed by 7-Zip",
     )
-    parser.add_argument("--version", action="version", version=f"{program_name} 0.2.0")
+    parser.add_argument("--version", action="version", version=f"{program_name} {__version__}")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     plan = subparsers.add_parser("plan", help="inspect inputs and emit a JSON Lines manifest")
