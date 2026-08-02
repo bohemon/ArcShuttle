@@ -6,7 +6,7 @@ requirements below.
 
 ## Project direction
 
-- The product name is **ArcShuttle**. The current release target is version 0.3.0.
+- The product name is **ArcShuttle**. The current release target is version 0.3.1.
 - The distribution, primary Python package, and primary CLI are all named `arcshuttle`.
 - `parxtract` remains a compatibility surface. Do not remove or silently change its CLI,
   Python-module entry point, manifest v1 support, JSON Lines contract, or exit behavior.
