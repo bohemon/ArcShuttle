@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from arcshuttle.config import resolve_config
+from arcshuttle.config import Config, resolve_config
 from arcshuttle.util import UsageError, parse_size
 
 
@@ -75,9 +75,65 @@ def test_legacy_root_toml_and_environment_remain_supported(tmp_path: Path) -> No
 def test_storage_profile_default_slots() -> None:
     config = resolve_config({"storage_profile": "nvme", "max_processes": 8}, environ={})
     assert config.io_slots == 4
+    assert config.provenance.storage_profile_explicit is True
+    assert config.provenance.io_slots_explicit is False
+    assert config.uses_auto_io_slots is False
 
     override = resolve_config({"storage_profile": "hdd", "io_slots": 3}, environ={})
     assert override.io_slots == 3
+    assert override.provenance.io_slots_explicit is True
+
+
+def test_default_configuration_retains_automatic_io_provenance() -> None:
+    config = resolve_config({}, environ={})
+
+    assert config.io_slots == min(2, config.max_processes)
+    assert config.provenance.io_slots_explicit is False
+    assert config.provenance.storage_profile_explicit is False
+    assert config.uses_auto_io_slots is True
+
+    direct = Config()
+    assert direct.provenance.io_slots_explicit is True
+    assert direct.provenance.storage_profile_explicit is True
+    assert direct.uses_auto_io_slots is False
+
+
+@pytest.mark.parametrize(
+    ("cli_values", "environ", "toml", "expected_profile_explicit", "expected_io_explicit"),
+    [
+        ({"storage_profile": "auto"}, {}, "", True, False),
+        ({"io_slots": 3}, {}, "", False, True),
+        ({}, {"ARCSHUTTLE_STORAGE_PROFILE": "nvme"}, "", True, False),
+        ({}, {"PARXTRACT_IO_SLOTS": "3"}, "", False, True),
+        ({}, {}, '[arcshuttle]\nstorage_profile = "ssd"\n', True, False),
+        ({}, {}, "[parxtract]\nio_slots = 1\n", False, True),
+    ],
+)
+def test_io_provenance_tracks_every_public_configuration_source(
+    tmp_path: Path,
+    cli_values: dict[str, object],
+    environ: dict[str, str],
+    toml: str,
+    expected_profile_explicit: bool,
+    expected_io_explicit: bool,
+) -> None:
+    config_path = None
+    if toml:
+        config_path = tmp_path / "config.toml"
+        config_path.write_text(toml, encoding="utf-8")
+
+    config = resolve_config(cli_values, config_path=config_path, environ=environ)
+
+    assert config.provenance.storage_profile_explicit is expected_profile_explicit
+    assert config.provenance.io_slots_explicit is expected_io_explicit
+
+
+def test_internal_provenance_is_not_a_public_toml_option(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.toml"
+    config_path.write_text("[arcshuttle]\nprovenance = {}\n", encoding="utf-8")
+
+    with pytest.raises(UsageError, match="unknown config option"):
+        resolve_config({}, config_path=config_path, environ={})
 
 
 def test_cpu_budget_updates_dependent_defaults() -> None:
