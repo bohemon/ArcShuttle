@@ -2,7 +2,7 @@
 title: ArcShuttle Command and Option Manual
 language: en
 manual_version: 2
-applies_to_cli_version: 0.3.0
+applies_to_cli_version: 0.3.1
 jsonl_schema_version: 2
 audience:
   - human
@@ -18,7 +18,7 @@ source_of_truth:
 
 # ArcShuttle command and option manual
 
-This is the normative human/AI reference for ArcShuttle 0.3.0. “Must,” “must not,” and “may only” describe requirements. Stdout means the process standard-output byte stream; stderr means standard error.
+This is the normative human/AI reference for ArcShuttle 0.3.1. “Must,” “must not,” and “may only” describe requirements. Stdout means the process standard-output byte stream; stderr means standard error.
 
 ## 1. Minimum safe contract
 
@@ -145,7 +145,7 @@ Create scheduling:
 | other 7z | `heavy-scalable` | `min(heavy_threads,cpu_budget)` | `create-7z-lzma2` |
 | other zip | `heavy-scalable` | `min(heavy_threads,cpu_budget)` | `create-zip-deflate` |
 
-CPU tokens and `-mmt=N` do not strictly bound memory. LZMA2 memory use also depends on dictionary and method settings. ArcShuttle 0.3.0 has no memory-token or dynamic-memory controller.
+CPU tokens and `-mmt=N` do not strictly bound memory. LZMA2 memory use also depends on dictionary and method settings. ArcShuttle 0.3.1 has no memory-token or dynamic-memory controller.
 
 ## 6. Extraction contract
 
@@ -373,7 +373,15 @@ Get-ChildItem C:\Archives -File |
 
 PowerShell parameters map by name: `-ArcShuttleCommand`, `-SevenZip`/`-7z`, `-OutputDir`, `-Existing`, `-CpuBudget`, `-MaxProcesses`, `-StorageProfile`, `-IoSlots`, `-HeavyThreads`, `-SmallThreshold`, `-InspectThreshold`, `-InspectTimeout`, `-ReservationDelay`, `-SequentialIfTotalBelow`, `-LogDir`, `-Config`, `-OnInputError`, `-Quiet`, `-FailFast`, and `-AllowChanged`. Create plan/combined functions also accept `-Format` and `-Level`.
 
-The module writes BOM-free UTF-8 NUL input or JSON Lines to temporary files, converts native CLI stdout with `ConvertFrom-Json`, emits `PSCustomObject` records on the PowerShell success stream, replays stderr, preserves `$LASTEXITCODE`, and removes temporary files in `finally`.
+The module writes BOM-free UTF-8 NUL input or JSON Lines to temporary files, converts native CLI stdout with `ConvertFrom-Json`, emits only `PSCustomObject` records on the PowerShell success stream, preserves `$LASTEXITCODE`, and removes temporary files in `finally`. Progress and diagnostics from the native CLI are forwarded on stderr in real time while the command is running; they are not buffered and replayed after exit. `-Quiet` asks the core CLI to suppress supported progress, version, and automatic-I/O-selection diagnostics, but warnings and errors still use stderr.
+
+Keep the streams separate for a pure object pipeline. An explicit `2>&1` redirects PowerShell's error stream into its success stream, so diagnostic `ErrorRecord` values and `PSCustomObject` success records are then intentionally mixed:
+
+```powershell
+# Mixed output: useful for a combined transcript, not for a pure object pipeline.
+Get-ChildItem C:\Archives -File |
+    Invoke-ArcShuttleExtract -StorageProfile nvme 2>&1
+```
 
 `powershell/Parxtract.psm1` remains available with `Invoke-ParxtractPlan`, `Invoke-ParxtractRun`, and `Invoke-Parxtract` for legacy examples. It follows the same object-output contract.
 

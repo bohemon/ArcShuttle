@@ -2,7 +2,7 @@
 title: ArcShuttle コマンド・オプションマニュアル
 language: ja
 manual_version: 2
-applies_to_cli_version: 0.3.0
+applies_to_cli_version: 0.3.1
 jsonl_schema_version: 2
 audience:
   - human
@@ -18,7 +18,7 @@ source_of_truth:
 
 # ArcShuttle コマンド・オプションマニュアル
 
-本書はArcShuttle 0.3.0を操作する人間およびAIエージェント向けの規範的リファレンスである。「必須」「禁止」「のみ許可」は安全上の要件を表す。stdoutはプロセスの標準出力バイト列、stderrは標準エラーを意味する。
+本書はArcShuttle 0.3.1を操作する人間およびAIエージェント向けの規範的リファレンスである。「必須」「禁止」「のみ許可」は安全上の要件を表す。stdoutはプロセスの標準出力バイト列、stderrは標準エラーを意味する。
 
 ## 1. 最小安全契約
 
@@ -145,7 +145,7 @@ destination、staging、log rootがdirectory source内部へ入る構成は禁�
 | その他の7z | `heavy-scalable` | `min(heavy_threads,cpu_budget)` | `create-7z-lzma2` |
 | その他のzip | `heavy-scalable` | `min(heavy_threads,cpu_budget)` | `create-zip-deflate` |
 
-CPU tokenと`-mmt=N`はmemoryを厳密に制限しない。LZMA2のmemory使用量はdictionaryやmethod設定にも依存する。ArcShuttle 0.3.0はmemory tokenや動的memory controllerを持たない。
+CPU tokenと`-mmt=N`はmemoryを厳密に制限しない。LZMA2のmemory使用量はdictionaryやmethod設定にも依存する。ArcShuttle 0.3.1はmemory tokenや動的memory controllerを持たない。
 
 ## 6. 展開契約
 
@@ -373,7 +373,15 @@ Get-ChildItem C:\Archives -File |
 
 PowerShell parameterは名前対応する:`-ArcShuttleCommand`、`-SevenZip`/`-7z`、`-OutputDir`、`-Existing`、`-CpuBudget`、`-MaxProcesses`、`-StorageProfile`、`-IoSlots`、`-HeavyThreads`、`-SmallThreshold`、`-InspectThreshold`、`-InspectTimeout`、`-ReservationDelay`、`-SequentialIfTotalBelow`、`-LogDir`、`-Config`、`-OnInputError`、`-Quiet`、`-FailFast`、`-AllowChanged`。create plan/combined functionは`-Format`と`-Level`も受ける。
 
-moduleはBOMなしUTF-8 NUL入力またはJSON Linesを一時fileへ書き、native CLI stdoutだけを`ConvertFrom-Json`し、PowerShell success streamへ`PSCustomObject` recordを出力し、stderrを再表示し、`$LASTEXITCODE`を保持し、`finally`で一時fileを削除する。
+moduleはBOMなしUTF-8 NUL入力またはJSON Linesを一時fileへ書き、native CLI stdoutだけを`ConvertFrom-Json`し、PowerShell success streamへ`PSCustomObject` recordだけを出力し、`$LASTEXITCODE`を保持し、`finally`で一時fileを削除する。native CLIの進捗と診断はcommand実行中にstderrへリアルタイム転送し、終了後にbufferをまとめて再生しない。`-Quiet`はcore CLIが対応する進捗、version、自動I/O判定の診断を抑制するが、warningとerrorは引き続きstderrへ出る。
+
+純粋なobject pipelineではstreamを分離する。明示的な`2>&1`はPowerShell error streamをsuccess streamへredirectするため、診断の`ErrorRecord`と成功出力の`PSCustomObject`が意図的に混在する:
+
+```powershell
+# 混合出力: 一体のtranscriptには有用だが、純粋なobject pipelineではない。
+Get-ChildItem C:\Archives -File |
+    Invoke-ArcShuttleExtract -StorageProfile nvme 2>&1
+```
 
 互換用`powershell/Parxtract.psm1`は`Invoke-ParxtractPlan`、`Invoke-ParxtractRun`、`Invoke-Parxtract`を維持する。同じobject出力contractに従う。
 

@@ -186,6 +186,22 @@ def test_command_manual_defines_powershell_output_and_persistence_contracts(
 
 
 @pytest.mark.parametrize("manual", MANUALS, ids=("en", "ja"))
+def test_command_manual_defines_powershell_stream_contract(manual: Path) -> None:
+    text = manual.read_text(encoding="utf-8")
+    required_terms = (
+        "PSCustomObject",
+        "stderr",
+        "-Quiet",
+        "2>&1",
+        "ErrorRecord",
+        "object pipeline",
+    )
+    assert [term for term in required_terms if term not in text] == []
+    real_time_term = "in real time" if manual.name.endswith(".en.md") else "リアルタイム"
+    assert real_time_term in text
+
+
+@pytest.mark.parametrize("manual", MANUALS, ids=("en", "ja"))
 def test_command_manual_defines_automatic_io_resolution_contract(manual: Path) -> None:
     text = manual.read_text(encoding="utf-8")
     required_terms = (

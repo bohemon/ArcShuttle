@@ -49,24 +49,20 @@ function Invoke-ParxtractNativeJsonLines {
         [Parameter(Mandatory)] [string[]] $Arguments
     )
 
-    $stderrPath = [System.IO.Path]::GetTempFileName()
+    $nativeExitCode = $null
     try {
-        $lines = @(& $Command @Arguments 2> $stderrPath)
+        $lines = @(& $Command @Arguments)
         $nativeExitCode = $LASTEXITCODE
-        if (Test-Path -LiteralPath $stderrPath) {
-            foreach ($line in [System.IO.File]::ReadLines($stderrPath)) {
-                [Console]::Error.WriteLine($line)
-            }
-        }
         foreach ($line in $lines) {
             if (-not [string]::IsNullOrWhiteSpace([string]$line)) {
                 $line | ConvertFrom-Json -Depth 100
             }
         }
-        $global:LASTEXITCODE = $nativeExitCode
     }
     finally {
-        Remove-Item -LiteralPath $stderrPath -Force -ErrorAction SilentlyContinue
+        if ($null -ne $nativeExitCode) {
+            $global:LASTEXITCODE = $nativeExitCode
+        }
     }
 }
 

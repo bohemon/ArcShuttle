@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import json
+import os
+import shlex
 import shutil
 import subprocess
+import threading
 from pathlib import Path
 
 import pytest
@@ -397,3 +400,214 @@ $savedExit = $LASTEXITCODE
     assert result["has_bom"] is False
     assert result["temporary_exists"] is False
     assert result["exit_code"] == 4
+
+
+@pytest.mark.parametrize(
+    ("module_name", "command_name", "command_parameter"),
+    (
+        ("ArcShuttle", "Invoke-ArcShuttleRun", "ArcShuttleCommand"),
+        ("Parxtract", "Invoke-ParxtractRun", "ParxtractCommand"),
+    ),
+)
+def test_stderr_streams_before_exit_in_order_and_preserves_contracts(
+    tmp_path: Path,
+    module_name: str,
+    command_name: str,
+    command_parameter: str,
+) -> None:
+    module = ROOT / "powershell" / f"{module_name}.psm1"
+    release_marker = tmp_path / "release.marker"
+    fixture = tmp_path / "native-fixture.ps1"
+    fixture.write_text(
+        f"""
+$cliArgs = @($args)
+$manifestIndex = [Array]::IndexOf($cliArgs, '--manifest')
+$manifestPath = $cliArgs[$manifestIndex + 1]
+[Console]::Error.WriteLine('stream-first')
+[Console]::Error.Flush()
+$deadline = [DateTime]::UtcNow.AddSeconds(15)
+while (-not (Test-Path -LiteralPath {ps_quote(release_marker)})) {{
+    if ([DateTime]::UtcNow -ge $deadline) {{ throw 'release marker timeout' }}
+    Start-Sleep -Milliseconds 10
+}}
+[Console]::Error.WriteLine('stream-second')
+[pscustomobject]@{{
+    record_type = 'summary'
+    temporary_path = $manifestPath
+}} | ConvertTo-Json -Compress
+[Console]::Error.WriteLine('stream-last')
+[Console]::Error.Flush()
+exit 23
+""",
+        encoding="utf-8",
+    )
+    if os.name == "nt":
+        wrapper = tmp_path / "native-fixture.cmd"
+        wrapper.write_text(
+            f'@"{PWSH}" -NoLogo -NoProfile -NonInteractive -File "{fixture}" %*\n'
+            "@exit /b %ERRORLEVEL%\n",
+            encoding="utf-8",
+        )
+    else:
+        wrapper = tmp_path / "native-fixture"
+        wrapper.write_text(
+            "#!/bin/sh\n"
+            f"exec {shlex.quote(PWSH or 'pwsh')} -NoLogo -NoProfile -NonInteractive "
+            f'-File {shlex.quote(str(fixture))} "$@"\n',
+            encoding="utf-8",
+        )
+        wrapper.chmod(0o755)
+    script = f"""
+Import-Module {ps_quote(module)} -Force
+$records = @(
+    [pscustomobject]@{{ schema_version = 2; operation = 'extract' }} |
+        {command_name} -{command_parameter} {ps_quote(wrapper)}
+)
+$savedExit = $LASTEXITCODE
+[pscustomobject]@{{
+    count = $records.Count
+    type_name = $records[0].PSObject.TypeNames[0]
+    record_type = $records[0].record_type
+    temporary_exists = Test-Path -LiteralPath $records[0].temporary_path
+    exit_code = $savedExit
+}} | ConvertTo-Json -Compress
+"""
+    script_path = tmp_path / "streaming.ps1"
+    script_path.write_text(script, encoding="utf-8")
+    process = subprocess.Popen(
+        [
+            PWSH or "pwsh",
+            "-NoLogo",
+            "-NoProfile",
+            "-NonInteractive",
+            "-File",
+            str(script_path),
+        ],
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        encoding="utf-8",
+    )
+    stderr_lines: list[str] = []
+    first_line_seen = threading.Event()
+
+    def read_stderr() -> None:
+        assert process.stderr is not None
+        for line in process.stderr:
+            stderr_lines.append(line)
+            if "stream-first" in line:
+                first_line_seen.set()
+
+    reader = threading.Thread(target=read_stderr, daemon=True)
+    reader.start()
+    try:
+        assert first_line_seen.wait(10), "first stderr line was not forwarded promptly"
+        assert process.poll() is None, "process exited before its first stderr line was observed"
+        release_marker.touch()
+        assert process.stdout is not None
+        stdout = process.stdout.read()
+        return_code = process.wait(timeout=10)
+        reader.join(timeout=2)
+    finally:
+        release_marker.touch(exist_ok=True)
+        if process.poll() is None:
+            process.kill()
+            process.wait(timeout=5)
+
+    assert not reader.is_alive(), "stderr did not reach EOF"
+    stderr = "".join(stderr_lines)
+    assert return_code == 0, stderr
+    result = json.loads(stdout)
+    assert result == {
+        "count": 1,
+        "type_name": "System.Management.Automation.PSCustomObject",
+        "record_type": "summary",
+        "temporary_exists": False,
+        "exit_code": 23,
+    }
+    assert "stream-" not in stdout
+    assert stderr.index("stream-first") < stderr.index("stream-second")
+    assert stderr.index("stream-second") < stderr.index("stream-last")
+
+
+@pytest.mark.parametrize(
+    ("module_name", "command_name", "command_parameter"),
+    (
+        ("ArcShuttle", "Invoke-ArcShuttleRun", "ArcShuttleCommand"),
+        ("Parxtract", "Invoke-ParxtractRun", "ParxtractCommand"),
+    ),
+)
+def test_quiet_is_forwarded_and_suppresses_fixture_progress(
+    tmp_path: Path,
+    module_name: str,
+    command_name: str,
+    command_parameter: str,
+) -> None:
+    module = ROOT / "powershell" / f"{module_name}.psm1"
+    script = f"""
+Import-Module {ps_quote(module)} -Force
+function global:Invoke-QuietFixture {{
+    $cliArgs = @($args)
+    if ('--quiet' -notin $cliArgs) {{ Write-Error 'quiet-progress' }}
+    [pscustomobject]@{{ record_type = 'summary'; quiet = '--quiet' -in $cliArgs }} |
+        ConvertTo-Json -Compress
+    $global:LASTEXITCODE = 0
+}}
+$record = [pscustomobject]@{{ schema_version = 2; operation = 'extract' }} |
+    {command_name} -{command_parameter} Invoke-QuietFixture -Quiet
+$record | ConvertTo-Json -Compress
+"""
+
+    completed = run_script(tmp_path, script)
+
+    assert completed.returncode == 0, completed.stderr
+    assert json.loads(completed.stdout)["quiet"] is True
+    assert "quiet-progress" not in completed.stderr
+
+
+@pytest.mark.parametrize(
+    ("module_name", "command_name", "command_parameter"),
+    (
+        ("ArcShuttle", "Invoke-ArcShuttleRun", "ArcShuttleCommand"),
+        ("Parxtract", "Invoke-ParxtractRun", "ParxtractCommand"),
+    ),
+)
+def test_explicit_stderr_merge_makes_success_stream_mixed(
+    tmp_path: Path,
+    module_name: str,
+    command_name: str,
+    command_parameter: str,
+) -> None:
+    module = ROOT / "powershell" / f"{module_name}.psm1"
+    script = f"""
+Import-Module {ps_quote(module)} -Force
+function global:Invoke-MergedFixture {{
+    Write-Error 'merged-diagnostic'
+    [pscustomobject]@{{ record_type = 'summary' }} | ConvertTo-Json -Compress
+    $global:LASTEXITCODE = 6
+}}
+$merged = @(
+    [pscustomobject]@{{ schema_version = 2; operation = 'extract' }} |
+        {command_name} -{command_parameter} Invoke-MergedFixture 2>&1
+)
+$savedExit = $LASTEXITCODE
+[pscustomobject]@{{
+    type_names = @($merged | ForEach-Object {{ $_.GetType().FullName }})
+    diagnostic = [string]$merged[0]
+    record_type = $merged[1].record_type
+    exit_code = $savedExit
+}} | ConvertTo-Json -Compress
+"""
+
+    completed = run_script(tmp_path, script)
+
+    assert completed.returncode == 0, completed.stderr
+    result = json.loads(completed.stdout)
+    assert result["type_names"] == [
+        "System.Management.Automation.ErrorRecord",
+        "System.Management.Automation.PSCustomObject",
+    ]
+    assert "merged-diagnostic" in result["diagnostic"]
+    assert result["record_type"] == "summary"
+    assert result["exit_code"] == 6
