@@ -163,7 +163,7 @@ def test_command_manual_covers_safety_compatibility_and_automation_contracts(
     required_terms += (
         ("schema v2", "schema v1", "multi-source", "CPU token")
         if manual.name.endswith(".en.md")
-        else ("スキーマv2", "スキーマv1", "複数の`source`", "`CPU token`")
+        else ("スキーマv2", "スキーマv1", "複数の*source*", "*CPU token*")
     )
     folded_text = text.casefold()
     missing = [term for term in required_terms if term.casefold() not in folded_text]
@@ -191,7 +191,7 @@ def test_command_manual_defines_powershell_output_and_persistence_contracts(
     required_terms += (
         ("display formatting", "output collision")
         if manual.name.endswith(".en.md")
-        else ("表示形式", "`destination`の衝突")
+        else ("表示形式", "*destination*の衝突")
     )
     assert [term for term in required_terms if term not in text] == []
     duplicate_term = "duplicate" if manual.name.endswith(".en.md") else "重複"
@@ -240,7 +240,7 @@ def test_command_manual_defines_automatic_io_resolution_contract(manual: Path) -
     required_terms += (
         ("unknown = 2", "source", "destination", "stderr")
         if manual.name.endswith(".en.md")
-        else ("不明 = 2", "`source`", "`destination`", "標準エラー出力")
+        else ("不明 = 2", "*source*", "*destination*", "標準エラー出力")
     )
 
     assert [term for term in required_terms if term not in text] == []
@@ -255,8 +255,7 @@ def test_japanese_manual_prose_does_not_use_unformatted_english_terms(
     document: Path,
 ) -> None:
     prose = _markdown_prose(document)
-    bare_english_terms = (
-        "allowlist",
+    bare_general_terms = (
         "archive",
         "boolean",
         "checkout",
@@ -264,7 +263,6 @@ def test_japanese_manual_prose_does_not_use_unformatted_english_terms(
         "contract",
         "create",
         "default",
-        "destination",
         "directory",
         "download",
         "end-user",
@@ -278,39 +276,27 @@ def test_japanese_manual_prose_does_not_use_unformatted_english_terms(
         "help",
         "input",
         "install",
-        "inventory",
-        "job",
         "key",
         "log",
-        "manifest",
         "metadata",
         "module",
         "namespace",
         "object",
-        "operation",
         "option",
         "output",
         "parser",
         "path",
-        "plan",
         "process",
-        "profile",
         "queue",
         "record",
         "release",
-        "result",
         "root",
         "run",
-        "schedule",
-        "scheduler",
         "schema",
         "session",
-        "source",
-        "staging",
         "stderr",
         "stdout",
         "stream",
-        "summary",
         "tagged",
         "text",
         "thread",
@@ -320,7 +306,7 @@ def test_japanese_manual_prose_does_not_use_unformatted_english_terms(
     )
     found = [
         term
-        for term in bare_english_terms
+        for term in bare_general_terms
         if re.search(
             rf"(?<![A-Za-z0-9_-]){re.escape(term)}(?![A-Za-z0-9_-])",
             prose,
@@ -331,10 +317,12 @@ def test_japanese_manual_prose_does_not_use_unformatted_english_terms(
     assert found == []
 
 
-def test_japanese_command_manual_marks_arcshuttle_concepts_as_code() -> None:
-    text = (ROOT / "docs" / "COMMAND_MANUAL.ja.md").read_text(encoding="utf-8")
+def test_japanese_command_manual_marks_arcshuttle_concepts_as_italics() -> None:
+    manual = ROOT / "docs" / "COMMAND_MANUAL.ja.md"
+    text = manual.read_text(encoding="utf-8")
     concepts = (
         "operation",
+        "plan",
         "source",
         "destination",
         "inventory",
@@ -352,7 +340,20 @@ def test_japanese_command_manual_marks_arcshuttle_concepts_as_code() -> None:
         "I/O slot",
     )
 
-    assert [concept for concept in concepts if f"`{concept}`" not in text] == []
+    assert [concept for concept in concepts if f"*{concept}*" not in text] == []
+
+    prose = _markdown_prose(manual)
+    prose_without_italics = re.sub(r"(?<!\*)\*[^*\n]+\*(?!\*)", "", prose)
+    unmarked = [
+        concept
+        for concept in concepts
+        if re.search(
+            rf"(?<![A-Za-z0-9_-]){re.escape(concept)}(?![A-Za-z0-9_-])",
+            prose_without_italics,
+            flags=re.IGNORECASE,
+        )
+    ]
+    assert unmarked == []
 
 
 def test_readme_covers_stable_project_entrypoint_contracts() -> None:

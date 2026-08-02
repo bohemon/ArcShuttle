@@ -20,31 +20,32 @@ source_of_truth:
 
 本書は、ArcShuttle 0.3.1の利用者とAIエージェント向けの規範的なリファレンスである。「必須」「禁止」「～のみ許可」は安全上の要件を表す。標準出力（`stdout`）はプロセスの標準出力バイト列、標準エラー出力（`stderr`）はプロセスの標準エラー出力を意味する。
 
-本文では、ファイル、ディレクトリ、パス、プロセスなどの一般用語を日本語で表記する。一方、ArcShuttleが意味を定義する概念には、一般的な意味との違いを示すため、英語のコード体を用いる。主な固有概念は次のとおりである。
+本文では、ファイル、ディレクトリ、パス、プロセスなどの一般用語を日本語で表記する。コマンド、オプション、フィールド、値などのリテラルにはコード体を用い、ArcShuttleが意味を定義する概念にはイタリック体を用いる。主な固有概念は次のとおりである。
 
 | 表記 | 本書での意味 |
 |---|---|
-| `operation` | `extract`または`create`として選択する処理種別 |
-| `source`／`destination` | 処理対象となる入力元／確定後の出力先 |
-| `inventory` | `create`用に記録する`source`の内容集合 |
-| `job` | `scheduler`が実行する個々の処理単位 |
-| `manifest` | `job`を含む、実行用の完全なJSON Lines入力 |
-| `profile` | CPUとI/Oの資源割り当てに使う分類 |
-| `schedule`／`scheduler` | 資源割り当てと実行順序／それを管理する機構 |
-| `staging` | 出力を確定する前に使う、所有マーカー付きの作業領域 |
-| `result`／`summary` | `job`ごとの結果／実行全体の集計レコード |
-| `allowlist` | 外部フィルターによる変更を許可するフィールドの一覧 |
+| *operation* | `extract`または`create`として選択する処理種別 |
+| *plan* | `plan`コマンドが出力する、実行前の*job*またはその集合 |
+| *source*／*destination* | 処理対象となる入力元／確定後の出力先 |
+| *inventory* | `create`用に記録する*source*の内容集合 |
+| *job* | *scheduler*が実行する個々の処理単位 |
+| *manifest* | *job*を含む、実行用の完全なJSON Lines入力 |
+| *profile* | CPUとI/Oの資源割り当てに使う分類 |
+| *schedule*／*scheduler* | 資源割り当てと実行順序／それを管理する機構 |
+| *staging* | 出力を確定する前に使う、所有マーカー付きの作業領域 |
+| *result*／*summary* | *job*ごとの結果／実行全体の集計レコード |
+| *allowlist* | 外部フィルターによる変更を許可するフィールドの一覧 |
 
 ## 1. 安全に利用するための基本要件
 
 1. 新規利用では`arcshuttle`を使う。`parxtract`は展開専用の0.1構文との互換用途に限る。
-2. `plan`の直後に`operation`（操作名）を置く。`arcshuttle plan`単体ではなく、`arcshuttle plan extract`のように書く。
+2. `plan`の直後に*operation*（操作名）を置く。`arcshuttle plan`単体ではなく、`arcshuttle plan extract`のように書く。
 3. パス入力は位置引数`PATH...`、`--files-from`、`--files0-from`のうち厳密に1種類だけ選ぶ。
 4. 標準出力はUTF-8 JSON Lines専用とする。診断、選択した7-Zipのバージョン、進捗は標準エラー出力へ書き込まれる。
-5. 終了コードが1または2でも標準出力をEOFまで読む。有効な`result`と`summary`が出力されている場合がある。
-6. 完全な`manifest`を検証してから実行する。外部フィルターが変更できるのは9章の`allowlist`にあるフィールドだけである。
-7. 処理を成功させるために、`source`、既存の`destination`、保持された`.failed`の`staging`を削除してはならない。
-8. 同じ資源予算で扱う`job`群は、1つの`arcshuttle run`コマンドへ渡す。複数の`run`コマンドをGNU Parallelなどから並列実行しない。
+5. 終了コードが1または2でも標準出力をEOFまで読む。有効な*result*と*summary*が出力されている場合がある。
+6. 完全な*manifest*を検証してから実行する。外部フィルターが変更できるのは9章の*allowlist*にあるフィールドだけである。
+7. 処理を成功させるために、*source*、既存の*destination*、保持された`.failed`の*staging*を削除してはならない。
+8. 同じ資源予算で扱う*job*群は、1つの`arcshuttle run`コマンドへ渡す。複数の`run`コマンドをGNU Parallelなどから並列実行しない。
 
 ```sh
 arcshuttle create folder-a file.dat
@@ -77,13 +78,13 @@ parxtract extract [OPTIONS] PATH...
 
 | コマンド | 入力 | 標準出力 | 用途 |
 |---|---|---|---|
-| `plan extract` | アーカイブファイル | スキーマv2の`job`レコード | 検査して展開計画を作る |
-| `plan create` | 通常ファイルまたはディレクトリ | スキーマv2の`job`レコード | `inventory`を作り、独立したアーカイブを計画する |
-| `run` | v1/v2のJSON Lines `manifest` | `result`の後に`summary` | 全`job`を1つの`schedule`で検証・実行する |
-| `extract` | アーカイブファイル | `result`の後に`summary` | 1回の呼び出しで計画・展開する |
-| `create` | 通常ファイルまたはディレクトリ | `result`の後に`summary` | 1回の呼び出しで計画・作成・検証・確定する |
+| `plan extract` | アーカイブファイル | スキーマv2の*job*レコード | 検査して展開計画を作る |
+| `plan create` | 通常ファイルまたはディレクトリ | スキーマv2の*job*レコード | *inventory*を作り、独立したアーカイブを計画する |
+| `run` | v1/v2のJSON Lines *manifest* | *result*の後に*summary* | 全*job*を1つの*schedule*で検証・実行する |
+| `extract` | アーカイブファイル | *result*の後に*summary* | 1回の呼び出しで計画・展開する |
+| `create` | 通常ファイルまたはディレクトリ | *result*の後に*summary* | 1回の呼び出しで計画・作成・検証・確定する |
 
-`run --manifest -`だけが`manifest`を標準入力から読み込む。パスを受け付けるコマンドは標準入力を暗黙には読み込まない。
+`run --manifest -`だけが*manifest*を標準入力から読み込む。パスを受け付けるコマンドは標準入力を暗黙には読み込まない。
 
 ## 3. パス入力
 
@@ -97,38 +98,38 @@ parxtract extract [OPTIONS] PATH...
 
 3形式は相互排他である。明示的に空のリストを渡すと入力エラーになる。相対パスはプロセスの作業ディレクトリを基準に正規化し、重複時は最初の1件を残す。
 
-`extract`コマンドは通常のアーカイブファイルだけを受け付け、一般的な分割アーカイブ名は先頭ボリュームのパスに正規化する。`create`コマンドは通常のファイルまたはディレクトリを受け付ける。シンボリックリンク、ジャンクション／再解析ポイント、ソケット、デバイスなどの特殊なエントリはたどらず、`source`自体またはその配下に1件でも含まれていれば入力エラーとする。空のディレクトリは`inventory`に含めて保持する。
+`extract`コマンドは通常のアーカイブファイルだけを受け付け、一般的な分割アーカイブ名は先頭ボリュームのパスに正規化する。`create`コマンドは通常のファイルまたはディレクトリを受け付ける。シンボリックリンク、ジャンクション／再解析ポイント、ソケット、デバイスなどの特殊なエントリはたどらず、*source*自体またはその配下に1件でも含まれていれば入力エラーとする。空のディレクトリは*inventory*に含めて保持する。
 
 ## 4. 全オプション一覧
 
-適用範囲のPは2つの`plan`の`operation`、Rは`run`、Eは`extract`、Cは`create`、Aは4つの`operation`パーサーすべてを表す。
+適用範囲のPは2つの`plan`の*operation*、Rは`run`、Eは`extract`、Cは`create`、Aは4つの*operation*パーサーすべてを表す。
 
 | オプション | 値 | 既定値 | 範囲 | 意味 |
 |---|---|---|---|---|
 | `-h`, `--help` | フラグ | - | 全パーサー階層 | 対象のヘルプを表示 |
 | `--version` | フラグ | - | 最上位 | バージョンを表示して終了 |
 | `--7z PATH` | パスまたはコマンド | 自動探索 | A | 7-Zip実行ファイルを選択 |
-| `--output-dir DIR` | パス | `source`の親 | A | 各`destination`の基準ディレクトリ |
+| `--output-dir DIR` | パス | *source*の親 | A | 各*destination*の基準ディレクトリ |
 | `--existing {fail,skip,rename}` | 列挙値 | `fail` | A | 既存出力を非破壊で扱う方針 |
-| `--cpu-budget Nまたはauto` | 整数または`auto` | 論理CPU数-1 | A | `CPU token`の総数 |
+| `--cpu-budget Nまたはauto` | 整数または`auto` | 論理CPU数-1 | A | *CPU token*の総数 |
 | `--max-processes N` | 正整数 | `min(4,cpu_budget)` | A | 同時に実行する7-Zipプロセスの上限 |
-| `--storage-profile {auto,hdd,ssd,nvme}` | 列挙値 | `auto` | A | 実行時判定または固定`I/O-slot profile` |
-| `--io-slots N` | 正整数 | 自動判定／`profile`依存 | A | `I/O token`の総数。明示値を優先 |
-| `--heavy-threads N` | 正整数 | `min(4,cpu_budget)` | A | 並列化可能な`job`のCPU／スレッド上限 |
+| `--storage-profile {auto,hdd,ssd,nvme}` | 列挙値 | `auto` | A | 実行時判定または固定*I/O-slot profile* |
+| `--io-slots N` | 正整数 | 自動判定／*profile*依存 | A | *I/O token*の総数。明示値を優先 |
+| `--heavy-threads N` | 正整数 | `min(4,cpu_budget)` | A | 並列化可能な*job*のCPU／スレッド上限 |
 | `--small-threshold SIZE` | サイズ | `64M` | A | これ未満の入力を`small`に分類 |
 | `--inspect-threshold SIZE` | サイズ | `64M` | A | 展開検査を行うサイズ閾値 |
 | `--inspect-timeout SECONDS` | 非負数 | `30` | A | 展開時の一覧取得タイムアウト |
 | `--reservation-delay SECONDS` | 非負数 | `30` | A | キュー先頭への予約を始める待ち時間 |
-| `--sequential-if-total-below SIZE` | サイズ | `0` | A | 小規模バッチを1プロセス／1 `I/O slot`で実行 |
+| `--sequential-if-total-below SIZE` | サイズ | `0` | A | 小規模バッチを1プロセス／1 *I/O slot*で実行 |
 | `--log-dir DIR` | パス | `.arcshuttle/logs` | A | 実行ログの基準ディレクトリ |
 | `--config FILE` | パス | なし | A | 明示的なTOMLファイル。グローバルファイルは暗黙に読まない |
 | `--quiet` | フラグ | `false` | A | バージョン／進捗の標準エラー出力を抑制。エラーは残す |
-| `--fail-fast` | フラグ | `false` | A | `job`失敗後に新しい`job`の開始を停止 |
-| `--allow-changed` | フラグ | `false` | A | 安全な`source identity`の変更を、警告を出して許可 |
-| `--on-input-error {fail,skip}` | 列挙値 | `fail` | A | 計画全体の出力を抑止、または有効な`job`だけを保持 |
+| `--fail-fast` | フラグ | `false` | A | *job*失敗後に新しい*job*の開始を停止 |
+| `--allow-changed` | フラグ | `false` | A | 安全な*source identity*の変更を、警告を出して許可 |
+| `--on-input-error {fail,skip}` | 列挙値 | `fail` | A | 計画全体の出力を抑止、または有効な*job*だけを保持 |
 | `--files-from FILE` | パスまたは`-` | なし | P/E/C | 明示的な改行区切りパス入力 |
 | `--files0-from FILE` | パスまたは`-` | なし | P/E/C | 明示的なNUL区切りパス入力 |
-| `--manifest FILE` | パスまたは`-` | 必須 | R | 完全なJSON Lines `manifest` |
+| `--manifest FILE` | パスまたは`-` | 必須 | R | 完全なJSON Lines *manifest* |
 | `--format {7z,zip}` | 列挙値 | `7z` | `plan create`/C | 出力アーカイブ形式 |
 | `--level 0..9` | 整数 | `5` | `plan create`/C | 圧縮レベル。0は無圧縮で格納 |
 
@@ -138,28 +139,28 @@ parxtract extract [OPTIONS] PATH...
 
 ## 5. `create`コマンドの動作仕様
 
-`create`コマンドは、`source`1件につき独立したアーカイブを1個作る。複数の`source`を1個のアーカイブには結合しない。
+`create`コマンドは、*source*1件につき独立したアーカイブを1個作る。複数の*source*を1個のアーカイブには結合しない。
 
-| `source` | 既定の`destination` | アーカイブのルートに格納するもの |
+| *source* | 既定の*destination* | アーカイブのルートに格納するもの |
 |---|---|---|
 | ディレクトリ`photos/` | `photos.7z` | `photos/`の内容。上位に余分な`photos/`階層を追加しない |
 | ファイル`data.bin` | `data.bin.7z` | ベース名`data.bin`だけ |
 
 `--output-dir DIR`は、既定の各アーカイブ名を`DIR`直下へ置く。`--format zip`は拡張子を`.zip`にする。圧縮レベルは0～9で、計画上の方式は`7z`がLZMA2、`zip`がDeflateである。レベル0は圧縮せずに格納する。利用者が指定する任意の未加工7-Zipオプションは受け付けない。
 
-`plan create`コマンドは、決定的な`inventory`と`source identity`を記録し、実行直前に再度`inventory`を取得する。`source identity`が変化していると既定では失敗する。`--allow-changed`は、安全なメタデータまたは内容集合の変更に限り、警告を出したうえで許可する。`source.kind`の変更や特殊なエントリは許可しない。
+`plan create`コマンドは、決定的な*inventory*と*source identity*を記録し、実行直前に再度*inventory*を取得する。*source identity*が変化していると既定では失敗する。`--allow-changed`は、安全なメタデータまたは内容集合の変更に限り、警告を出したうえで許可する。`source.kind`の変更や特殊なエントリは許可しない。
 
-`destination`、`staging`、ログの基準ディレクトリを`source`ディレクトリの内部に置く構成は禁止する。名前による除外ではなく、正規化・解決したパスの関係で判定する。
+*destination*、*staging*、ログの基準ディレクトリを*source*ディレクトリの内部に置く構成は禁止する。名前による除外ではなく、正規化・解決したパスの関係で判定する。
 
-`create`の`job`分類：
+`create`の*job*分類：
 
-| 条件 | `profile` | `CPU token`／スレッド |
+| 条件 | *profile* | *CPU token*／スレッド |
 |---|---|---:|
 | サイズが`small_threshold`未満 | `small` | 1 |
 | `small`ではなく圧縮レベル0 | `heavy-serial` | 1 |
 | その他の`7z`または`zip`作成 | `heavy-scalable` | `min(heavy_threads,cpu_budget)` |
 
-`CPU token`と`-mmt=N`はメモリを厳密には制限しない。LZMA2のメモリ使用量は、辞書や圧縮方式の設定にも依存する。
+*CPU token*と`-mmt=N`はメモリを厳密には制限しない。LZMA2のメモリ使用量は、辞書や圧縮方式の設定にも依存する。
 
 ## 6. `extract`コマンドの動作仕様
 
@@ -169,7 +170,7 @@ parxtract extract [OPTIONS] PATH...
 
 大きいアーカイブまたは形式不明のアーカイブは、タイムアウト付きの`7z l -slt`で検査する。不明なメタデータは`null`のままにする。タイムアウトまたは検査失敗は警告となり、保守的な分類を使う。暗号化されていることが確定したアーカイブは実行時に失敗する。パスワードの入力や探索には対応しない。
 
-`extract`の`profile`は`small`、BZip2や独立した`7z`ブロックなどの根拠がある場合の`heavy-scalable`、保守的な判定または検査失敗時の`heavy-serial`である。
+`extract`の*profile*は`small`、BZip2や独立した`7z`ブロックなどの根拠がある場合の`heavy-scalable`、保守的な判定または検査失敗時の`heavy-serial`である。
 
 ## 7. 設定
 
@@ -227,9 +228,9 @@ compression_level = 5
 
 7-Zipは、明示した`--7z`または設定値、`PATH`上の`7zz`、`7z`、`7za`、Windowsの標準インストール先の順で探す。選択した実行ファイルとバージョンは、`--quiet`がなければ標準エラー出力へ表示する。
 
-## 8. `scheduler`による資源共有
+## 8. *scheduler*による資源共有
 
-異なる`operation`が混在する`manifest`も1つの`scheduler`を使い、常に次を満たす。
+異なる*operation*が混在する*manifest*も1つの*scheduler*を使い、常に次を満たす。
 
 ```text
 sum(cpu_tokens) <= cpu_budget
@@ -237,13 +238,13 @@ running_jobs     <= max_processes
 sum(io_tokens)  <= io_slots
 ```
 
-`scheduler`は、優先度、`profile`、推定負荷、`plan_index`を考慮する。利用可能な資源に収まる後続`job`は空き資源を利用できるが、`reservation_delay`経過後はキューの先頭へ資源を予約して飢餓状態を防ぐ。
+*scheduler*は、優先度、*profile*、推定負荷、`plan_index`を考慮する。利用可能な資源に収まる後続*job*は空き資源を利用できるが、`reservation_delay`経過後はキューの先頭へ資源を予約して飢餓状態を防ぐ。
 
-`storage_profile = "auto"`かつ`--io-slots`が明示されていない場合、`run`、`extract`、`create`の各コマンドは、実行直前に検証済みの`source`と`destination`が属するデバイスを調べる。割り当てはHDD = 1、SSD = 2、NVMe = 4、不明 = 2 `I/O slot`であり、重複しないデバイスのうち最小値を採用して`max_processes`を上限とする。判定に失敗した場合は不明時の代替値を使い、実行を妨げない。単独の`plan`コマンドはストレージを調査しないため、`manifest`を別のマシンへ移して利用できる。明示的な`--io-slots`を最優先し、明示的な`hdd`、`ssd`、`nvme`の`profile`には固定の既定値を使う。有効値と理由は、`--quiet`がなければ標準エラー出力へ書き込む。
+`storage_profile = "auto"`かつ`--io-slots`が明示されていない場合、`run`、`extract`、`create`の各コマンドは、実行直前に検証済みの*source*と*destination*が属するデバイスを調べる。割り当てはHDD = 1、SSD = 2、NVMe = 4、不明 = 2 *I/O slot*であり、重複しないデバイスのうち最小値を採用して`max_processes`を上限とする。判定に失敗した場合は不明時の代替値を使い、実行を妨げない。単独の`plan`コマンドはストレージを調査しないため、*manifest*を別のマシンへ移して利用できる。明示的な`--io-slots`を最優先し、明示的な`hdd`、`ssd`、`nvme`の*profile*には固定の既定値を使う。有効値と理由は、`--quiet`がなければ標準エラー出力へ書き込む。
 
-`--fail-fast`は、ステータスが`failed`の`result`レコードが出た後に、新しい`job`の開始を止める。実行中の`job`は完了させ、未開始の`job`は`skipped`にする。割り込み時は新しい`job`の開始を止め、管理対象の子プロセスグループへ通知し、安全に待機または終了して`interrupted`を返す。v2の`result`レコードは、完了順ではなく決定的な`plan_index`順で最終出力する。
+`--fail-fast`は、ステータスが`failed`の*result*レコードが出た後に、新しい*job*の開始を止める。実行中の*job*は完了させ、未開始の*job*は`skipped`にする。割り込み時は新しい*job*の開始を止め、管理対象の子プロセスグループへ通知し、安全に待機または終了して`interrupted`を返す。v2の*result*レコードは、完了順ではなく決定的な`plan_index`順で最終出力する。
 
-## 9. `manifest`の仕様
+## 9. *manifest*の仕様
 
 ### 9.1 スキーマv2
 
@@ -284,7 +285,7 @@ sum(io_tokens)  <= io_slots
 
 `operation`が`extract`の場合は、`source.kind`に`file`、`destination.kind`に`directory`を使い、可能な範囲で取得したアーカイブ検査フィールドを含める。
 
-外部フィルターが変更できる`allowlist`は次のとおりである。
+外部フィルターが変更できる*allowlist*は次のとおりである。
 
 ```text
 destination.path
@@ -295,7 +296,7 @@ scheduling.threads
 tags
 ```
 
-その他のフィールドは`integrity`で保護する。変更後の`destination.path`も絶対パスで、一意かつ安全でなければならない。`CPU token`／スレッドの上書き値は、型検査後に設定済みCPU予算の範囲内へ収め、必要に応じて警告を付ける。`I/O token`は変更できず、予算内でなければならない。`integrity`を再計算または削除してはならない。
+その他のフィールドは`integrity`で保護する。変更後の`destination.path`も絶対パスで、一意かつ安全でなければならない。*CPU token*／スレッドの上書き値は、型検査後に設定済みCPU予算の範囲内へ収め、必要に応じて警告を付ける。*I/O token*は変更できず、予算内でなければならない。`integrity`を再計算または削除してはならない。
 
 ```sh
 arcshuttle plan create dir-a dir-b |
@@ -305,40 +306,40 @@ arcshuttle plan create dir-a dir-b |
 
 ### 9.2 スキーマv1互換
 
-`parxtract plan`は、`path`と`output_dir`を持つ展開専用のv1構造を変更せずに出力する。`arcshuttle run`と`parxtract run`はv1を読み込み、内部で`extract`の`job`へ変換する。v1の`allowlist`は、`output_dir`、同じ4つのスケジューリング上書きフィールド、`tags`のままである。v1の`result`形式にv2限定フィールドは追加しない。
+`parxtract plan`は、`path`と`output_dir`を持つ展開専用のv1構造を変更せずに出力する。`arcshuttle run`と`parxtract run`はv1を読み込み、内部で`extract`の*job*へ変換する。v1の*allowlist*は、`output_dir`、同じ4つのスケジューリング上書きフィールド、`tags`のままである。v1の*result*形式にv2限定フィールドは追加しない。
 
-v1の展開`job`とv2の`job`は、同じ`manifest`に混在できる。v2入力が1件でもあれば、全体の`summary`はスキーマv2となる。
+v1の展開*job*とv2の*job*は、同じ*manifest*に混在できる。v2入力が1件でもあれば、全体の*summary*はスキーマv2となる。
 
-## 10. `staging`、検証、`result`、ログ
+## 10. *staging*、検証、*result*、ログ
 
 ### 10.1 展開
 
-最終ディレクトリの隣に`.arcshuttle-<job-id>-<random>.tmp`を作り、`.arcshuttle-owned`を書き込んで7-Zipを実行する。終了コード0の場合だけ、`destination`を再確認してから確定する。警告、失敗、割り込みが発生した場合は、所有マーカーを確認できる`staging`を`.failed`として保持する。所有を確認できないパスは移動または削除しない。
+最終ディレクトリの隣に`.arcshuttle-<job-id>-<random>.tmp`を作り、`.arcshuttle-owned`を書き込んで7-Zipを実行する。終了コード0の場合だけ、*destination*を再確認してから確定する。警告、失敗、割り込みが発生した場合は、所有マーカーを確認できる*staging*を`.failed`として保持する。所有を確認できないパスは移動または削除しない。
 
 ### 10.2 作成
 
 作成は次の順序を厳守する。
 
-1. パスの関係、`source identity`、非破壊の`--existing`方針を検証する。
-2. `destination`の隣に、非公開の所有マーカー付き`staging`ディレクトリを作る。
+1. パスの関係、*source identity*、非破壊の`--existing`方針を検証する。
+2. *destination*の隣に、非公開の所有マーカー付き*staging*ディレクトリを作る。
 3. 引数配列、`shell=False`、閉じた標準入力、制御された作業ディレクトリを使って`7z a`を実行する。
-4. `staging`済みの通常アーカイブと、`7z t`による検証の成功を必須とする。
-5. `destination`が存在しないことを再確認して原子的に公開し、所有を確認した空の`staging`だけを削除する。
+4. *staging*済みの通常アーカイブと、`7z t`による検証の成功を必須とする。
+5. *destination*が存在しないことを再確認して原子的に公開し、所有を確認した空の*staging*だけを削除する。
 
-作成または検証で警告、失敗、割り込みが発生した場合や、確定前に問題が発生した場合は、`staging`を`.failed`として保持する。`source`は移動、変更、削除しない。
+作成または検証で警告、失敗、割り込みが発生した場合や、確定前に問題が発生した場合は、*staging*を`.failed`として保持する。*source*は移動、変更、削除しない。
 
-### 10.3 `result`
+### 10.3 *result*
 
-`status`は`success`、`warning`、`failed`、`skipped`、`interrupted`のいずれかである。すべてのv2の`result`レコードは、`operation`、`output_path`、`staging_path`と、旧形式の別名である`output_dir`／`staging_dir`を含む。作成`result`は`create_exit_code`と`verification_exit_code`も含み、対象プロセスが未起動の場合は`null`になり得る。`log_path`は、存在する`job`のログを指す。
+`status`は`success`、`warning`、`failed`、`skipped`、`interrupted`のいずれかである。すべてのv2の*result*レコードは、`operation`、`output_path`、`staging_path`と、旧形式の別名である`output_dir`／`staging_dir`を含む。作成*result*は`create_exit_code`と`verification_exit_code`も含み、対象プロセスが未起動の場合は`null`になり得る。`log_path`は、存在する*job*のログを指す。
 
-最後のレコードは必ず`summary`であり、5つのステータスの件数、合計、`duration_ms`を持つ。
+最後のレコードは必ず*summary*であり、5つのステータスの件数、合計、`duration_ms`を持つ。
 
 | プロセス終了コード | 意味 | JSON Linesの可能性 |
 |---:|---|:---:|
-| 0 | 全`job`が警告なしで成功 | あり |
-| 1 | 警告、スキップ、または`result`の警告があり、失敗はない | あり |
+| 0 | 全*job*が警告なしで成功 | あり |
+| 1 | 警告、スキップ、または*result*の警告があり、失敗はない | あり |
 | 2 | 1件以上が失敗 | あり |
-| 64 | 使用方法、設定、入力、または`manifest`のエラー | 通常なし |
+| 64 | 使用方法、設定、入力、または*manifest*のエラー | 通常なし |
 | 130 | 割り込み | あり |
 
 ### 10.4 ログ
@@ -360,11 +361,11 @@ Get-ChildItem C:\Archives -File |
     Invoke-ArcShuttleExtract -OutputDir C:\Extracted
 ```
 
-| 関数 | パイプライン入力 | 対応する`operation` |
+| 関数 | パイプライン入力 | 対応する*operation* |
 |---|---|---|
 | `Invoke-ArcShuttleExtractPlan` | 文字列または`FileSystemInfo` | `plan extract` |
 | `Invoke-ArcShuttleCreatePlan` | 文字列または`FileSystemInfo` | `plan create`。各項目は独立 |
-| `Invoke-ArcShuttleRun` | `job`オブジェクト | `run` |
+| `Invoke-ArcShuttleRun` | *job*オブジェクト | `run` |
 | `Invoke-ArcShuttleExtract` | 文字列または`FileSystemInfo` | `extract`の`plan`後に`run` |
 | `Invoke-ArcShuttleCreate` | 文字列または`FileSystemInfo` | `create`の`plan`後に`run` |
 
@@ -388,11 +389,11 @@ Get-ChildItem C:\Archives -File |
 
 | 出力元 | 成功時の出力 | 主な用途 |
 |---|---|---|
-| `arcshuttle plan`／`parxtract plan` | 正規のUTF-8 JSON Lines | 可搬性のある`manifest`ファイルとPowerShell以外のツール |
+| `arcshuttle plan`／`parxtract plan` | 正規のUTF-8 JSON Lines | 可搬性のある*manifest*ファイルとPowerShell以外のツール |
 | `Invoke-ArcShuttle*Plan`／`Invoke-ParxtractPlan` | `PSCustomObject`レコード | 同一セッション内のPowerShellオブジェクトパイプライン |
 | `Export-Clixml`／`Import-Clixml` | PowerShellオブジェクトのスナップショット | PowerShell専用のセッション間保存 |
 
-同じPowerShellセッション内で`plan`を作成して実行する場合は、オブジェクトのまま扱う：
+同じPowerShellセッション内で*plan*を作成して実行する場合は、オブジェクトのまま扱う：
 
 ```powershell
 $plans = @(
@@ -404,7 +405,7 @@ $plans | Select-Object plan_index, operation, source, destination
 $plans | Invoke-ArcShuttleRun
 ```
 
-保存形式は、ファイルの拡張子だけでは選択されない。`plan`オブジェクトをリダイレクトするとPowerShellの表示形式が適用され、`manifest`は作成**されない**：
+保存形式は、ファイルの拡張子だけでは選択されない。*plan*オブジェクトをリダイレクトするとPowerShellの表示形式が適用され、*manifest*は作成**されない**：
 
 ```powershell
 # 無効な保存：ファイル内容はJSON Linesではなく、一部の情報が失われた表示用の形式となる。
@@ -412,7 +413,7 @@ Get-ChildItem C:\Archives -File |
     Invoke-ArcShuttleExtractPlan > extract.jsonl
 ```
 
-このファイルを`run`コマンドへ渡したり修復を試みたりせず、`source`から`plan`を作り直す。
+このファイルを`run`コマンドへ渡したり修復を試みたりせず、*source*から*plan*を作り直す。
 
 正規のJSON Linesが必要な場合は、PowerShellからネイティブCLIを使う：
 
@@ -424,7 +425,7 @@ Get-Content -LiteralPath .\extract.jsonl |
     Select-Object plan_index, operation, source, destination
 ```
 
-ネイティブコマンドラインの上限を超えるパス集合には、3章の`--files0-from`を使う。有効なJSON Linesファイルは、レコードストリームとして連結できる。ArcShuttleは結合した`manifest`全体を検証し、重複する`job_id`と`destination`の衝突を拒否する。独立した`plan`間では`plan_index`が重複してもよい。`plan_index`は`integrity`で保護されるため、連番へ振り直してはならない。
+ネイティブコマンドラインの上限を超えるパス集合には、3章の`--files0-from`を使う。有効なJSON Linesファイルは、レコードストリームとして連結できる。ArcShuttleは結合した*manifest*全体を検証し、重複する`job_id`と*destination*の衝突を拒否する。独立した*plan*間では`plan_index`が重複してもよい。`plan_index`は`integrity`で保護されるため、連番へ振り直してはならない。
 
 PowerShell専用のセッション間スナップショットには、CLIXMLを明示的に使う：
 
@@ -434,12 +435,12 @@ $plans = @(Import-Clixml -LiteralPath .\plans.clixml)
 $plans | Invoke-ArcShuttleRun
 ```
 
-同じ方法を`Invoke-ParxtractPlan`と`Invoke-ParxtractRun`にも使える。CLIXMLはArcShuttleの`manifest`ではなく、`arcshuttle run --manifest`では受理しない。複数のスナップショットを扱う場合は、未加工のCLIXMLを連結せず、インポート後のオブジェクトリストを結合する。
+同じ方法を`Invoke-ParxtractPlan`と`Invoke-ParxtractRun`にも使える。CLIXMLはArcShuttleの*manifest*ではなく、`arcshuttle run --manifest`では受理しない。複数のスナップショットを扱う場合は、未加工のCLIXMLを連結せず、インポート後のオブジェクトリストを結合する。
 
 ## 12. POSIX例
 
 ```sh
-# `create`の`job`を確認してから実行する。
+# `create`の*job*を確認してから実行する。
 find /data/source -mindepth 1 -maxdepth 1 -print0 |
   arcshuttle plan create --files0-from - --format 7z > create.jsonl
 jq -e -c 'select(.record_type == "job")' create.jsonl |
@@ -450,22 +451,22 @@ fd --type f --print0 . /data/archives |
   arcshuttle extract --files0-from - --output-dir /data/out
 ```
 
-シェルパイプライン全体の終了状態が必要な場合は`set -o pipefail`を使う。ただし、`plan`コマンドの終了コードが1でも有効な`job`があるため、警告の扱いが重要な場合は、`plan`の標準出力と終了コードを別々に保存する。
+シェルパイプライン全体の終了状態が必要な場合は`set -o pipefail`を使う。ただし、`plan`コマンドの終了コードが1でも有効な*job*があるため、警告の扱いが重要な場合は、`plan`コマンドの標準出力と終了コードを別々に保存する。
 
 ## 13. parxtract 0.1からの移行
 
 - 配布名`arcshuttle`には、両方のコンソールスクリプトが含まれる。新しいCLIとPowerShellワークフローでは`arcshuttle`を使う。
-- 既存の`parxtract`コマンド、互換モジュール、スキーマv1の`manifest`は、展開用途で引き続き利用できる。
+- 既存の`parxtract`コマンド、互換モジュール、スキーマv1の*manifest*は、展開用途で引き続き利用できる。
 - `ARCSHUTTLE_*`と`[arcshuttle]`を優先する。新名称が優先され、作成設定に旧形式の別名はない。
 - 既存の`.parxtract`データは移行、改名、所有、削除しない。ArcShuttleは新しい`.arcshuttle`パスへ書き込む。
 
 ## 14. AIエージェント手順
 
-1. `plan`コマンドを実行する前に、バージョン、7-Zipの利用可否、`operation`、出力形式、安全な`destination`を確認する。自動生成したパスや任意の文字を含むパスにはNUL区切り入力を使う。
-2. 標準出力と標準エラー出力を分離し、`plan`内の全`job`について、`operation`と`destination`の一意性を確認する。
-3. フィルターではv2の`allowlist`にあるフィールドだけを変更する。`integrity`を再生成せず、保護された`source`、アーカイブ、`inventory`、I/Oフィールドを変更しない。
-4. 完全なストリームを1つの`run`プロセスへ渡し、標準出力をEOFまで読み、すべての`result`、最後の`summary`、プロセスの終了コードを合わせて判定する。
-5. `null`でない`staging_path`と`log_path`を報告する。保持されたデータを削除せず、`source`の変更、拒否対象リンクの追跡、上書き保護の迂回を行わない。
+1. `plan`コマンドを実行する前に、バージョン、7-Zipの利用可否、*operation*、出力形式、安全な*destination*を確認する。自動生成したパスや任意の文字を含むパスにはNUL区切り入力を使う。
+2. 標準出力と標準エラー出力を分離し、*plan*内の全*job*について、*operation*と*destination*の一意性を確認する。
+3. フィルターではv2の*allowlist*にあるフィールドだけを変更する。`integrity`を再生成せず、保護された*source*、アーカイブ、*inventory*、I/Oフィールドを変更しない。
+4. 完全なストリームを1つの`run`プロセスへ渡し、標準出力をEOFまで読み、すべての*result*、最後の*summary*、プロセスの終了コードを合わせて判定する。
+5. `null`でない`staging_path`と`log_path`を報告する。保持されたデータを削除せず、*source*の変更、拒否対象リンクの追跡、上書き保護の迂回を行わない。
 
 機械判定の概要：
 
@@ -484,15 +485,15 @@ else:
 
 ## 15. 制限事項とトラブルシューティング
 
-作成機能は、`source`1件につきアーカイブ1個、`7z`／`zip`、圧縮レベル0～9、通常エントリ、ローカルの非分割出力に対応する。複数の`source`の結合、分割、暗号化アーカイブの作成、パスワード入力、未加工の圧縮方式調整、厳密なメモリ予算、GUI、監視サービスには対応しない。
+作成機能は、*source*1件につきアーカイブ1個、`7z`／`zip`、圧縮レベル0～9、通常エントリ、ローカルの非分割出力に対応する。複数の*source*の結合、分割、暗号化アーカイブの作成、パスワード入力、未加工の圧縮方式調整、厳密なメモリ予算、GUI、監視サービスには対応しない。
 
 | 症状 | 確認 | 安全な対処 |
 |---|---|---|
 | `7-Zip not found` | `--7z`、`ARCSHUTTLE_7Z`、`PATH` | 対応実行ファイルを設定 |
-| 終了コード64かつ標準出力が空 | 標準エラー出力にある使用方法／入力／`manifest`エラー | 構文を修正するか`plan`を作り直す。レコードを捏造しない |
-| 終了コード1で出力あり | 警告、スキップ、`result`の警告 | `summary`を解析して詳細を報告 |
-| `source identity changed` | `plan`後の変更 | `plan`を作り直す。意図した変更の場合だけ`--allow-changed`を使う |
-| `immutable field modified` | 外部フィルター | 元の`plan`から`allowlist`のフィールドだけを編集し直す |
-| `output collision` | 派生または編集したパスの重複 | `destination`を一意にする |
+| 終了コード64かつ標準出力が空 | 標準エラー出力にある使用方法／入力／*manifest*エラー | 構文を修正するか*plan*を作り直す。レコードを捏造しない |
+| 終了コード1で出力あり | 警告、スキップ、*result*の警告 | *summary*を解析して詳細を報告 |
+| `source identity changed` | *plan*後の変更 | *plan*を作り直す。意図した変更の場合だけ`--allow-changed`を使う |
+| `immutable field modified` | 外部フィルター | 元の*plan*から*allowlist*のフィールドだけを編集し直す |
+| `output collision` | 派生または編集したパスの重複 | *destination*を一意にする |
 | `.failed`が残る | 作成／検証／展開時の警告または失敗 | ログ確認後に必要なデータを手動で回収 |
 | HDDのスループット低下 | I/O競合 | `hdd`または`--io-slots 1`を選択 |
