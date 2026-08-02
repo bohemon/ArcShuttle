@@ -25,6 +25,14 @@ POWERSHELL_MANIFESTS = (
 )
 
 
+def _markdown_prose(path: Path) -> str:
+    text = path.read_text(encoding="utf-8")
+    text = re.sub(r"(?ms)\A---\n.*?^---\n", "", text)
+    text = re.sub(r"(?ms)^```.*?^```\s*", "", text)
+    text = re.sub(r"`[^`\n]*`", "", text)
+    return re.sub(r"\]\([^\n)]*\)", "]", text)
+
+
 @pytest.mark.parametrize("manual", MANUALS, ids=("en", "ja"))
 def test_command_manual_covers_every_cli_command_and_option(manual: Path) -> None:
     text = manual.read_text(encoding="utf-8")
@@ -142,19 +150,20 @@ def test_command_manual_covers_safety_compatibility_and_automation_contracts(
 ) -> None:
     text = manual.read_text(encoding="utf-8")
     required_terms = (
-        "schema v2",
-        "schema v1",
         "destination.path",
         "verification_exit_code",
         "create.stdout.log",
         ".arcshuttle-owned",
         ".parxtract",
-        "multi-source",
         "Invoke-ArcShuttleCreatePlan",
         "Invoke-ParxtractPlan",
         "stdout",
         "stderr",
-        "CPU token",
+    )
+    required_terms += (
+        ("schema v2", "schema v1", "multi-source", "CPU token")
+        if manual.name.endswith(".en.md")
+        else ("スキーマv2", "スキーマv1", "複数入力元", "CPUトークン")
     )
     folded_text = text.casefold()
     missing = [term for term in required_terms if term.casefold() not in folded_text]
@@ -168,7 +177,6 @@ def test_command_manual_defines_powershell_output_and_persistence_contracts(
     text = manual.read_text(encoding="utf-8")
     required_terms = (
         "PSCustomObject",
-        "display formatting",
         "Invoke-ArcShuttleExtractPlan >",
         "arcshuttle plan extract --",
         "ConvertFrom-Json",
@@ -176,10 +184,14 @@ def test_command_manual_defines_powershell_output_and_persistence_contracts(
         "Import-Clixml",
         "CLIXML",
         "`job_id`",
-        "output collision",
         "`plan_index`",
         "`integrity`",
         "Invoke-ParxtractRun",
+    )
+    required_terms += (
+        ("display formatting", "output collision")
+        if manual.name.endswith(".en.md")
+        else ("表示形式", "出力先の衝突")
     )
     assert [term for term in required_terms if term not in text] == []
     duplicate_term = "duplicate" if manual.name.endswith(".en.md") else "重複"
@@ -203,7 +215,9 @@ def test_command_manual_defines_powershell_stream_contract(manual: Path) -> None
         "-Quiet",
         "2>&1",
         "ErrorRecord",
-        "object pipeline",
+    )
+    required_terms += (
+        ("object pipeline",) if manual.name.endswith(".en.md") else ("オブジェクトパイプライン",)
     )
     assert [term for term in required_terms if term not in text] == []
     real_time_term = "in real time" if manual.name.endswith(".en.md") else "リアルタイム"
@@ -218,17 +232,100 @@ def test_command_manual_defines_automatic_io_resolution_contract(manual: Path) -
         "HDD = 1",
         "SSD = 2",
         "NVMe = 4",
-        "unknown = 2",
-        "source",
-        "destination",
         "max_processes",
-        "stderr",
         "--quiet",
         "--io-slots",
         "`plan`",
     )
+    required_terms += (
+        ("unknown = 2", "source", "destination", "stderr")
+        if manual.name.endswith(".en.md")
+        else ("不明 = 2", "入力元", "出力先", "標準エラー出力")
+    )
 
     assert [term for term in required_terms if term not in text] == []
+
+
+@pytest.mark.parametrize(
+    "document",
+    (ROOT / "docs" / "COMMAND_MANUAL.ja.md", ROOT / "docs" / "INSTALLATION.ja.md"),
+    ids=("command", "installation"),
+)
+def test_japanese_manual_prose_does_not_use_bare_english_common_terms(
+    document: Path,
+) -> None:
+    prose = _markdown_prose(document)
+    bare_english_terms = (
+        "allowlist",
+        "archive",
+        "boolean",
+        "checkout",
+        "command",
+        "contract",
+        "create",
+        "default",
+        "destination",
+        "directory",
+        "download",
+        "end-user",
+        "environment",
+        "error",
+        "extract",
+        "field",
+        "file",
+        "filter",
+        "global",
+        "help",
+        "input",
+        "install",
+        "inventory",
+        "job",
+        "key",
+        "log",
+        "manifest",
+        "metadata",
+        "module",
+        "namespace",
+        "object",
+        "operation",
+        "option",
+        "output",
+        "parser",
+        "path",
+        "plan",
+        "process",
+        "profile",
+        "queue",
+        "record",
+        "release",
+        "result",
+        "root",
+        "run",
+        "schema",
+        "session",
+        "source",
+        "staging",
+        "stderr",
+        "stdout",
+        "stream",
+        "tagged",
+        "text",
+        "thread",
+        "version",
+        "virtual",
+        "warning",
+    )
+    found = [
+        term
+        for term in bare_english_terms
+        if re.search(
+            rf"(?<![A-Za-z0-9_-]){re.escape(term)}(?![A-Za-z0-9_-])",
+            prose,
+            flags=re.IGNORECASE,
+        )
+    ]
+
+    assert found == []
 
 
 def test_readme_covers_stable_project_entrypoint_contracts() -> None:
