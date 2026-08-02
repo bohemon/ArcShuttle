@@ -14,11 +14,11 @@ Requirements:
 - a current `7zz`, `7z`, or `7za` command
 - PowerShell 7 only for the optional object-pipeline modules
 
-For an isolated end-user CLI installation, install the verified v0.2.0 Release wheel with
+For an isolated end-user CLI installation, install the verified v0.3.0 Release wheel with
 [`pipx`](https://pipx.pypa.io/):
 
 ```sh
-pipx install "https://github.com/bohemon/ArcShuttle/releases/download/v0.2.0/arcshuttle-0.2.0-py3-none-any.whl"
+pipx install "https://github.com/bohemon/ArcShuttle/releases/download/v0.3.0/arcshuttle-0.3.0-py3-none-any.whl"
 arcshuttle --version
 parxtract --version
 ```
@@ -26,11 +26,11 @@ parxtract --version
 In an existing virtual environment, use the same wheel without cloning the repository:
 
 ```sh
-python -m pip install "https://github.com/bohemon/ArcShuttle/releases/download/v0.2.0/arcshuttle-0.2.0-py3-none-any.whl"
+python -m pip install "https://github.com/bohemon/ArcShuttle/releases/download/v0.3.0/arcshuttle-0.3.0-py3-none-any.whl"
 arcshuttle --version
 ```
 
-`arcshuttle` is the primary 0.2.0 CLI. `parxtract` remains a compatibility alias for the 0.1 extraction syntax and schema-v1 planning.
+`arcshuttle` is the primary 0.3.0 CLI. `parxtract` remains a compatibility alias for the 0.1 extraction syntax and schema-v1 planning.
 
 The optional PowerShell modules have a separate verified Release zip. The installation guides
 cover SHA-256 verification and CurrentUser installation. Do not pipe a downloaded script into
@@ -83,7 +83,7 @@ ArcShuttle does not provide a destructive overwrite mode and never deletes or mo
 - warnings, failures, verification failures, and interruptions retain owned staging as `.failed`;
 - symlinks, junctions/reparse points, sockets, devices, and other non-regular create entries are rejected without following them;
 - a create destination, staging location, or log location inside a directory source is rejected;
-- encrypted extraction and password discovery/input are outside the 0.2.0 scope;
+- encrypted extraction and password discovery/input are outside the 0.3.0 scope;
 - raw user-supplied 7-Zip arguments are not accepted.
 
 Create memory consumption depends on 7-Zip method and dictionary settings. CPU tokens limit concurrency and threads, but they are not a strict memory limit.
