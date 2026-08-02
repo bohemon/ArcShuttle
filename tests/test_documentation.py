@@ -356,11 +356,16 @@ def test_japanese_command_manual_marks_arcshuttle_concepts_as_italics() -> None:
     assert unmarked == []
 
 
-def test_japanese_command_manual_uses_literal_operation_names_for_sections() -> None:
+def test_japanese_command_manual_uses_clear_operation_aware_section_titles() -> None:
     text = (ROOT / "docs" / "COMMAND_MANUAL.ja.md").read_text(encoding="utf-8")
     required_terms = (
-        "### 10.1 `extract`",
-        "### 10.2 `create`",
+        "## 3. 入力パスの指定方法",
+        "## 8. *job*の実行順序と資源配分",
+        "## 10. 出力の検証・確定と実行記録",
+        "### 10.1 `extract`における出力の確定",
+        "### 10.2 `create`における検証と出力の確定",
+        "### 10.3 実行結果（*result*と*summary*）",
+        "### 10.4 実行ログ",
         "`extract`のログ",
         "`create`のログ",
         "`extract`で引き続き利用",

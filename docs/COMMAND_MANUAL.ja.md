@@ -86,7 +86,9 @@ parxtract extract [OPTIONS] PATH...
 
 `run --manifest -`だけが*manifest*を標準入力から読み込む。パスを受け付けるコマンドは標準入力を暗黙には読み込まない。
 
-## 3. パス入力
+## 3. 入力パスの指定方法
+
+処理対象のパスは、次の3形式のいずれか1つで指定する。
 
 | 形式 | 文字コード | 仕様 |
 |---|---|---|
@@ -96,7 +98,7 @@ parxtract extract [OPTIONS] PATH...
 | `--files0-from FILE` | UTF-8 | NUL区切り。末尾NUL可 |
 | `--files0-from -` | UTF-8 | 明示的なNUL区切り標準入力 |
 
-3形式は相互排他である。明示的に空のリストを渡すと入力エラーになる。相対パスはプロセスの作業ディレクトリを基準に正規化し、重複時は最初の1件を残す。
+これらの形式は相互排他である。明示的に空のリストを渡すと入力エラーになる。相対パスはプロセスの作業ディレクトリを基準に正規化し、重複時は最初の1件を残す。
 
 `extract`コマンドは通常のアーカイブファイルだけを受け付け、一般的な分割アーカイブ名は先頭ボリュームのパスに正規化する。`create`コマンドは通常のファイルまたはディレクトリを受け付ける。シンボリックリンク、ジャンクション／再解析ポイント、ソケット、デバイスなどの特殊なエントリはたどらず、*source*自体またはその配下に1件でも含まれていれば入力エラーとする。空のディレクトリは*inventory*に含めて保持する。
 
@@ -228,9 +230,9 @@ compression_level = 5
 
 7-Zipは、明示した`--7z`または設定値、`PATH`上の`7zz`、`7z`、`7za`、Windowsの標準インストール先の順で探す。選択した実行ファイルとバージョンは、`--quiet`がなければ標準エラー出力へ表示する。
 
-## 8. *scheduler*による資源共有
+## 8. *job*の実行順序と資源配分
 
-異なる*operation*が混在する*manifest*も1つの*scheduler*を使い、常に次を満たす。
+1つの*manifest*に含まれる*job*は、*operation*が異なっても同じ*scheduler*で実行する。*scheduler*は、次の資源上限を常に守る。
 
 ```text
 sum(cpu_tokens) <= cpu_budget
@@ -310,13 +312,15 @@ arcshuttle plan create dir-a dir-b |
 
 `extract`を行うv1の*job*とv2の*job*は、同じ*manifest*に混在できる。v2入力が1件でもあれば、全体の*summary*はスキーマv2となる。
 
-## 10. *staging*、検証、*result*、ログ
+## 10. 出力の検証・確定と実行記録
 
-### 10.1 `extract`
+本章では、`extract`と`create`で最終出力を安全に確定する手順と、実行後に得られる*result*、*summary*、ログを説明する。
+
+### 10.1 `extract`における出力の確定
 
 最終ディレクトリの隣に`.arcshuttle-<job-id>-<random>.tmp`を作り、`.arcshuttle-owned`を書き込んで7-Zipを実行する。終了コード0の場合だけ、*destination*を再確認してから確定する。警告、失敗、割り込みが発生した場合は、所有マーカーを確認できる*staging*を`.failed`として保持する。所有を確認できないパスは移動または削除しない。
 
-### 10.2 `create`
+### 10.2 `create`における検証と出力の確定
 
 `create`は次の順序を厳守する。
 
@@ -328,7 +332,7 @@ arcshuttle plan create dir-a dir-b |
 
 `create`または検証で警告、失敗、割り込みが発生した場合や、確定前に問題が発生した場合は、*staging*を`.failed`として保持する。*source*は移動、変更、削除しない。
 
-### 10.3 *result*
+### 10.3 実行結果（*result*と*summary*）
 
 `status`は`success`、`warning`、`failed`、`skipped`、`interrupted`のいずれかである。すべてのv2の*result*レコードは、`operation`、`output_path`、`staging_path`と、旧形式の別名である`output_dir`／`staging_dir`を含む。`create`の*result*は`create_exit_code`と`verification_exit_code`も含み、対象プロセスが未起動の場合は`null`になり得る。`log_path`は、存在する*job*のログを指す。
 
@@ -342,7 +346,7 @@ arcshuttle plan create dir-a dir-b |
 | 64 | 使用方法、設定、入力、または*manifest*のエラー | 通常なし |
 | 130 | 割り込み | あり |
 
-### 10.4 ログ
+### 10.4 実行ログ
 
 既定のログ基準ディレクトリは`<cwd>/.arcshuttle/logs/<run-id>/<job-id>/`である。
 
