@@ -231,15 +231,36 @@ def test_command_manual_defines_automatic_io_resolution_contract(manual: Path) -
     assert [term for term in required_terms if term not in text] == []
 
 
-def test_readme_has_required_arcshuttle_opening_and_migration_notes() -> None:
+def test_readme_covers_stable_project_entrypoint_contracts() -> None:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
 
     assert (
         "ArcShuttle is a resource-aware command-line tool for creating, extracting, "
         "and verifying multiple archives through the 7-Zip CLI."
     ) in readme
-    for term in ("`parxtract`", "schema-v1", "`.parxtract`", "memory", "multi-source"):
+    for term in (
+        "Windows",
+        "Linux",
+        "Python 3.11",
+        "`arcshuttle` is the primary CLI",
+        "`parxtract`",
+        "schema-v1",
+        "UTF-8 JSON Lines",
+        "never modifies or deletes a source",
+    ):
         assert term in readme
+
+
+def test_readme_quick_start_is_shell_neutral() -> None:
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    quick_start = readme.split("## Quick start", maxsplit=1)[1].split(
+        "## Safety and output", maxsplit=1
+    )[0]
+
+    assert "arcshuttle create" in quick_start
+    assert "arcshuttle extract" in quick_start
+    for posix_only_term in ("cat ", "find ", "/data/"):
+        assert posix_only_term not in quick_start
 
 
 def test_bilingual_manuals_and_powershell_modules_are_packaged() -> None:
