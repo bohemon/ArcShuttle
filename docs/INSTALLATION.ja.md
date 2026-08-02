@@ -1,22 +1,24 @@
 # ArcShuttle インストールガイド
 
-このガイドは、sourceをcheckoutしない安定したend-user installを中心に説明する。commandは
-v0.3.1へ固定し、`main`が変更されてもinstall結果が変わらないようにする。tagged sourceからの
-installと開発用checkoutは、別の選択肢として後半に示す。
+このガイドでは、ソースコードをチェックアウトせずに行う、エンドユーザー向けの安定した
+インストール方法を中心に説明する。コマンドはv0.3.1に固定し、`main`ブランチの変更によって
+インストール結果が変わらないようにしている。タグ付きソースからのインストールと開発用
+チェックアウトは、別の選択肢として後半で説明する。
 
 ## 必要環境
 
 - WindowsまたはLinux
 - Python 3.11以降
-- 現行の`7zz`、`7z`、または`7za`実行file
-- optionalなobject-pipeline moduleを使う場合のみPowerShell 7
+- 現行の`7zz`、`7z`、または`7za`の実行ファイル
+- PowerShell 7（任意のオブジェクトパイプライン用モジュールを使う場合のみ）
 
-## CLIのinstall
+## CLIのインストール
 
-### 推奨: pipxによる分離install
+### 推奨：pipxによる仮想環境へのインストール
 
-[`pipx`](https://pipx.pypa.io/)はCLI applicationごとに分離環境を作り、commandを`PATH`へ
-公開する。platformに合う方法でpipxをinstallした後、次を実行する:
+[pipx](https://pipx.pypa.io/)はコマンドラインアプリケーションごとに仮想環境を作り、
+コマンドを`PATH`から実行できるようにする。利用するプラットフォームに合う方法でpipxを
+インストールした後、次を実行する：
 
 ```sh
 pipx install "https://github.com/bohemon/ArcShuttle/releases/download/v0.3.1/arcshuttle-0.3.1-py3-none-any.whl"
@@ -24,7 +26,7 @@ arcshuttle --version
 parxtract --version
 ```
 
-この固定releaseをupgradeまたは再installする:
+同じバージョンを更新または再インストールする場合は、次を実行する：
 
 ```sh
 pipx install --force "https://github.com/bohemon/ArcShuttle/releases/download/v0.3.1/arcshuttle-0.3.1-py3-none-any.whl"
@@ -32,35 +34,39 @@ pipx install --force "https://github.com/bohemon/ArcShuttle/releases/download/v0
 
 削除は`pipx uninstall arcshuttle`で行う。
 
-### 既存のvirtual environment
+### 既存の仮想環境
 
-environmentをactivateし、Release wheelを直接installする:
+仮想環境を有効化し、GitHubリリースのwheelファイルを直接インストールする：
 
 ```sh
 python -m pip install "https://github.com/bohemon/ArcShuttle/releases/download/v0.3.1/arcshuttle-0.3.1-py3-none-any.whl"
 arcshuttle --version
 ```
 
-OSが管理するPython環境を直接変更せず、virtual environmentを使用する。
-新しいRelease wheelへ更新する場合はURL中のversionを変更してcommandへ`--upgrade`を追加する。
+OSが管理するPython環境を直接変更せず、仮想環境を使用する。
+GitHubリリースの新しいwheelファイルへ更新する場合は、URL中のバージョンを変更し、コマンドに
+`--upgrade`を追加する。
 削除は`python -m pip uninstall arcshuttle`で行う。
 
-### 代替: tagged sourceからのinstall
+### 代替：タグ付きソースからのインストール
 
-Release wheelが適さず、再現可能なsource installが必要な場合はtagまたはcommitを指定する:
+GitHubリリースのwheelファイルが適さず、ソースから再現可能な形でインストールする必要がある場合は、
+タグまたはコミットを指定する：
 
 ```sh
 pipx install "arcshuttle @ git+https://github.com/bohemon/ArcShuttle.git@v0.3.1"
 ```
 
-既存virtual environmentでは`pipx install`を`python -m pip install`へ置き換える。`@main`の
-installは未releaseの変更へ追従するため、安定したend-user installには推奨しない。
+既存の仮想環境では、`pipx install`を`python -m pip install`へ置き換える。`@main`からの
+インストールは未リリースの変更へ追従するため、エンドユーザー向けの安定したインストールには
+推奨しない。
 
-## PowerShell moduleのinstall
+## PowerShell モジュールのインストール
 
-v0.3.1 Releaseには`ArcShuttle`と互換用`Parxtract` moduleの両方が含まれる。次の
-PowerShell 7 commandはarchiveとchecksumをdownloadし、検証してからCurrentUser用のversion付き
-module directoryへinstallする。downloadしたtextを実行することはない。
+v0.3.1のリリースには、`ArcShuttle`モジュールと互換用の`Parxtract`モジュールが含まれる。
+次のコマンドをPowerShell 7で実行すると、アーカイブとチェックサムをダウンロードして検証した後、
+`CurrentUser`用のバージョン別モジュールディレクトリへインストールする。ダウンロードした
+テキストを実行することはない。
 
 ```powershell
 $version = '0.3.1'
@@ -92,11 +98,12 @@ Import-Module ArcShuttle -RequiredVersion $version -Force
 Get-Command -Module ArcShuttle
 ```
 
-PowerShell moduleはPythonや7-Zipを同梱せず`arcshuttle` CLIを呼び出すため、CLIも`PATH`上に
-必要となる。互換moduleが必要な場合は
-`Import-Module Parxtract -RequiredVersion $version`でimportする。
+PowerShell モジュールはPythonや7-Zipを同梱せず、`arcshuttle` CLIを呼び出すため、CLIも
+`PATH`上に必要となる。互換モジュールが必要な場合は、
+`Import-Module Parxtract -RequiredVersion $version`でインポートする。
 
-moduleを削除する場合は、利用中のsessionを閉じ、次のversion directoryだけを削除する:
+モジュールを削除する場合は、利用中のセッションを閉じ、次のバージョン別ディレクトリだけを
+削除する：
 
 ```powershell
 $removeVersion = '0.3.1'
@@ -109,16 +116,17 @@ Remove-Item -LiteralPath (Join-Path $moduleRoot "ArcShuttle/$removeVersion") -Re
 Remove-Item -LiteralPath (Join-Path $moduleRoot "Parxtract/$removeVersion") -Recurse
 ```
 
-更新する場合は`$version`を公開済みの新versionへ変更し、download、検証、展開を再実行する。
-PowerShellではversionごとに別directoryへ配置されるため、新manifestを検証してから旧version
-directoryを削除する。
+更新する場合は、`$version`を公開済みの新しいバージョンへ変更し、ダウンロード、検証、展開を
+再実行する。PowerShellではバージョンごとに別のディレクトリへ配置されるため、新しい
+モジュール マニフェストを検証してから旧バージョンのディレクトリを削除する。
 
-remote install scriptを`Invoke-Expression`（`iex`）へ渡してはならない。artifactをdownloadし、
-公開checksumを検証してから展開すれば、実行対象codeを検査可能な状態に保てる。
+リモートインストールスクリプトを`Invoke-Expression`（`iex`）へ渡してはならない。
+成果物をダウンロードし、公開チェックサムを検証してから展開すれば、実行対象のコードを
+検査できる状態に保てる。
 
-## 開発用checkout
+## 開発用チェックアウト
 
-ArcShuttleを変更する場合や完全なtest suiteを実行する場合にのみcloneが必要となる:
+ArcShuttleを変更する場合や、完全なテストスイートを実行する場合にのみクローンが必要となる：
 
 ```sh
 git clone https://github.com/bohemon/ArcShuttle.git
@@ -127,5 +135,5 @@ python -m pip install hatch
 hatch run check
 ```
 
-全command、option、machine-readable output、安全性contractは
+すべてのコマンド、オプション、機械可読出力、安全性仕様については、
 [コマンドマニュアル](COMMAND_MANUAL.ja.md)を参照する。

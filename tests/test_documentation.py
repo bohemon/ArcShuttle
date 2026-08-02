@@ -25,6 +25,14 @@ POWERSHELL_MANIFESTS = (
 )
 
 
+def _markdown_prose(path: Path) -> str:
+    text = path.read_text(encoding="utf-8")
+    text = re.sub(r"(?ms)\A---\n.*?^---\n", "", text)
+    text = re.sub(r"(?ms)^```.*?^```\s*", "", text)
+    text = re.sub(r"`[^`\n]*`", "", text)
+    return re.sub(r"\]\([^\n)]*\)", "]", text)
+
+
 @pytest.mark.parametrize("manual", MANUALS, ids=("en", "ja"))
 def test_command_manual_covers_every_cli_command_and_option(manual: Path) -> None:
     text = manual.read_text(encoding="utf-8")
@@ -142,19 +150,20 @@ def test_command_manual_covers_safety_compatibility_and_automation_contracts(
 ) -> None:
     text = manual.read_text(encoding="utf-8")
     required_terms = (
-        "schema v2",
-        "schema v1",
         "destination.path",
         "verification_exit_code",
         "create.stdout.log",
         ".arcshuttle-owned",
         ".parxtract",
-        "multi-source",
         "Invoke-ArcShuttleCreatePlan",
         "Invoke-ParxtractPlan",
         "stdout",
         "stderr",
-        "CPU token",
+    )
+    required_terms += (
+        ("schema v2", "schema v1", "multi-source", "CPU token")
+        if manual.name.endswith(".en.md")
+        else ("スキーマv2", "スキーマv1", "複数の*source*", "*CPU token*")
     )
     folded_text = text.casefold()
     missing = [term for term in required_terms if term.casefold() not in folded_text]
@@ -168,7 +177,6 @@ def test_command_manual_defines_powershell_output_and_persistence_contracts(
     text = manual.read_text(encoding="utf-8")
     required_terms = (
         "PSCustomObject",
-        "display formatting",
         "Invoke-ArcShuttleExtractPlan >",
         "arcshuttle plan extract --",
         "ConvertFrom-Json",
@@ -176,10 +184,24 @@ def test_command_manual_defines_powershell_output_and_persistence_contracts(
         "Import-Clixml",
         "CLIXML",
         "`job_id`",
-        "output collision",
         "`plan_index`",
         "`integrity`",
         "Invoke-ParxtractRun",
+    )
+    required_terms += (
+        (
+            "display formatting",
+            "output collision",
+            "plan then run extraction",
+            "plan then run creation",
+        )
+        if manual.name.endswith(".en.md")
+        else (
+            "表示形式",
+            "*destination*の衝突",
+            "`plan extract`の後に`run`",
+            "`plan create`の後に`run`",
+        )
     )
     assert [term for term in required_terms if term not in text] == []
     duplicate_term = "duplicate" if manual.name.endswith(".en.md") else "重複"
@@ -203,7 +225,9 @@ def test_command_manual_defines_powershell_stream_contract(manual: Path) -> None
         "-Quiet",
         "2>&1",
         "ErrorRecord",
-        "object pipeline",
+    )
+    required_terms += (
+        ("object pipeline",) if manual.name.endswith(".en.md") else ("オブジェクトパイプライン",)
     )
     assert [term for term in required_terms if term not in text] == []
     real_time_term = "in real time" if manual.name.endswith(".en.md") else "リアルタイム"
@@ -218,17 +242,192 @@ def test_command_manual_defines_automatic_io_resolution_contract(manual: Path) -
         "HDD = 1",
         "SSD = 2",
         "NVMe = 4",
-        "unknown = 2",
-        "source",
-        "destination",
         "max_processes",
-        "stderr",
         "--quiet",
         "--io-slots",
         "`plan`",
     )
+    required_terms += (
+        ("unknown = 2", "source", "destination", "stderr")
+        if manual.name.endswith(".en.md")
+        else ("不明 = 2", "*source*", "*destination*", "標準エラー出力")
+    )
 
     assert [term for term in required_terms if term not in text] == []
+
+
+@pytest.mark.parametrize(
+    "document",
+    (ROOT / "docs" / "COMMAND_MANUAL.ja.md", ROOT / "docs" / "INSTALLATION.ja.md"),
+    ids=("command", "installation"),
+)
+def test_japanese_manual_prose_does_not_use_unformatted_english_terms(
+    document: Path,
+) -> None:
+    prose = _markdown_prose(document)
+    prose_without_external_terms = prose.replace("PowerShellのError ストリーム", "")
+    bare_general_terms = (
+        "archive",
+        "boolean",
+        "checkout",
+        "command",
+        "contract",
+        "create",
+        "default",
+        "directory",
+        "download",
+        "end-user",
+        "environment",
+        "error",
+        "extract",
+        "field",
+        "file",
+        "filter",
+        "global",
+        "help",
+        "input",
+        "install",
+        "key",
+        "log",
+        "metadata",
+        "module",
+        "namespace",
+        "object",
+        "option",
+        "output",
+        "parser",
+        "path",
+        "process",
+        "queue",
+        "record",
+        "release",
+        "root",
+        "run",
+        "schema",
+        "session",
+        "stderr",
+        "stdout",
+        "stream",
+        "tagged",
+        "text",
+        "thread",
+        "version",
+        "virtual",
+        "warning",
+    )
+    found = [
+        term
+        for term in bare_general_terms
+        if re.search(
+            rf"(?<![A-Za-z0-9_-]){re.escape(term)}(?![A-Za-z0-9_-])",
+            prose_without_external_terms,
+            flags=re.IGNORECASE,
+        )
+    ]
+
+    assert found == []
+
+
+def test_japanese_command_manual_marks_arcshuttle_concepts_as_italics() -> None:
+    manual = ROOT / "docs" / "COMMAND_MANUAL.ja.md"
+    text = manual.read_text(encoding="utf-8")
+    concepts = (
+        "operation",
+        "plan",
+        "source",
+        "destination",
+        "inventory",
+        "job",
+        "manifest",
+        "profile",
+        "schedule",
+        "scheduler",
+        "staging",
+        "result",
+        "summary",
+        "allowlist",
+        "CPU token",
+        "I/O token",
+        "I/O slot",
+    )
+
+    assert [concept for concept in concepts if f"*{concept}*" not in text] == []
+
+    prose = _markdown_prose(manual)
+    prose_without_italics = re.sub(r"(?<!\*)\*[^*\n]+\*(?!\*)", "", prose)
+    unmarked = [
+        concept
+        for concept in concepts
+        if re.search(
+            rf"(?<![A-Za-z0-9_-]){re.escape(concept)}(?![A-Za-z0-9_-])",
+            prose_without_italics,
+            flags=re.IGNORECASE,
+        )
+    ]
+    assert unmarked == []
+
+
+def test_japanese_command_manual_uses_clear_operation_aware_section_titles() -> None:
+    text = (ROOT / "docs" / "COMMAND_MANUAL.ja.md").read_text(encoding="utf-8")
+    required_terms = (
+        "## 3. 入力パスの指定方法",
+        "## 8. *job*の実行順序と資源配分",
+        "## 10. 出力の検証・確定と実行記録",
+        "### 10.1 `extract`における出力の確定",
+        "### 10.2 `create`における検証と出力の確定",
+        "### 10.3 実行結果（*result*と*summary*）",
+        "### 10.4 実行ログ",
+        "`extract`のログ",
+        "`create`のログ",
+        "`extract`で引き続き利用",
+        "`create`の設定",
+    )
+
+    assert [term for term in required_terms if term not in text] == []
+
+
+def test_japanese_manuals_follow_external_tool_terminology() -> None:
+    command_manual = (ROOT / "docs" / "COMMAND_MANUAL.ja.md").read_text(encoding="utf-8")
+    installation_guide = (ROOT / "docs" / "INSTALLATION.ja.md").read_text(encoding="utf-8")
+
+    assert "PowerShellのSuccess ストリーム" in command_manual
+    assert "PowerShellのError ストリーム" in command_manual
+    assert "[pipx](https://pipx.pypa.io/)" in installation_guide
+    assert "pipxによる仮想環境へのインストール" in installation_guide
+    assert "GitHubリリースのwheelファイル" in installation_guide
+    assert "`main`ブランチ" in installation_guide
+    assert "タグまたはコミット" in installation_guide
+    assert "チェックアウト" in installation_guide
+    assert "クローン" in installation_guide
+    assert "PowerShell モジュール" in installation_guide
+    assert "モジュール マニフェスト" in installation_guide
+
+    deprecated_terms = (
+        "PowerShellのSuccessストリーム",
+        "PowerShellのErrorストリーム",
+        "PowerShellの成功ストリーム",
+        "PowerShellのエラーストリーム",
+        "PowerShellの`Success`ストリーム",
+        "PowerShellの`Error`ストリーム",
+        "PowerShellの*Success*ストリーム",
+        "PowerShellの*Error*ストリーム",
+        "`PowerShell`",
+        "*PowerShell*",
+        "`Python`",
+        "*Python*",
+        "`GitHub`",
+        "*GitHub*",
+        "`wheel`",
+        "*wheel*",
+        "[`pipx`](https://pipx.pypa.io/)",
+        "[*pipx*](https://pipx.pypa.io/)",
+        "pipxによる分離インストール",
+        "リリース用wheelファイル",
+        "PowerShellモジュール",
+        "モジュールマニフェスト",
+    )
+    combined_text = command_manual + installation_guide
+    assert [term for term in deprecated_terms if term in combined_text] == []
 
 
 def test_readme_covers_stable_project_entrypoint_contracts() -> None:
