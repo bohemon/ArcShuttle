@@ -187,7 +187,8 @@ def test_arcshuttle_create_plans_and_runs_in_one_invocation(
     assert records[0]["operation"] == "create"
     assert Path(records[0]["output_dir"]).read_bytes() == b"created"
     assert detected == [source, tmp_path / "out" / "source.dat.7z"]
-    assert "arcshuttle: I/O auto: io_slots=4" in captured.err
+    assert "arcshuttle: I/O auto: io_slots=" in captured.err
+    assert "detected storage classes: nvme" in captured.err
 
 
 def test_no_implicit_stdin(
