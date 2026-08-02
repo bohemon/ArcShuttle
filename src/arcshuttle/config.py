@@ -5,11 +5,24 @@ from __future__ import annotations
 import os
 import tomllib
 from collections.abc import Mapping
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 from .util import UsageError, parse_size
+
+
+@dataclass(frozen=True, slots=True)
+class ConfigProvenance:
+    """Record whether I/O controls came from an explicit public setting.
+
+    Direct ``Config`` construction is treated as explicit so internal callers and tests keep
+    the exact budgets they supplied. ``resolve_config`` replaces these defaults with provenance
+    derived from CLI, environment, and TOML inputs.
+    """
+
+    io_slots_explicit: bool = True
+    storage_profile_explicit: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -36,6 +49,15 @@ class Config:
     on_input_error: str = "fail"
     create_format: str = "7z"
     compression_level: int = 5
+    provenance: ConfigProvenance = field(
+        default_factory=ConfigProvenance, repr=False, compare=False
+    )
+
+    @property
+    def uses_auto_io_slots(self) -> bool:
+        """Return whether runtime endpoint detection may replace the conservative default."""
+
+        return not self.provenance.io_slots_explicit and self.storage_profile == "auto"
 
 
 _ENV_NAMES = {
@@ -118,7 +140,7 @@ def _coerce(name: str, value: Any) -> Any:
 def _validate_toml_values(
     values: Mapping[str, Any], source: str, *, allow_create: bool = True
 ) -> dict[str, Any]:
-    known = set(asdict(Config()))
+    known = set(_ENV_NAMES)
     if not allow_create:
         known -= _CREATE_FIELDS
     unknown = set(values) - known
@@ -164,7 +186,8 @@ def resolve_config(
 ) -> Config:
     """Resolve CLI, environment, TOML, and defaults in descending precedence."""
 
-    values: dict[str, Any] = asdict(Config())
+    defaults = Config()
+    values: dict[str, Any] = {name: getattr(defaults, name) for name in _ENV_NAMES}
     toml_values = _read_toml(config_path)
     values.update(toml_values)
     env = os.environ if environ is None else environ
@@ -204,10 +227,17 @@ def resolve_config(
 
     # I/O defaults depend on the resolved process/profile settings unless explicitly set.
     explicit_io = explicitly_set("io_slots")
+    explicit_storage_profile = explicitly_set("storage_profile")
     if not explicit_io:
         profile_slots = {"hdd": 1, "ssd": 2, "nvme": 4}
         values["io_slots"] = profile_slots.get(
             values["storage_profile"], min(2, values["max_processes"])
         )
     values["heavy_threads"] = min(values["heavy_threads"], values["cpu_budget"])
-    return Config(**values)
+    return Config(
+        **values,
+        provenance=ConfigProvenance(
+            io_slots_explicit=explicit_io,
+            storage_profile_explicit=explicit_storage_profile,
+        ),
+    )
