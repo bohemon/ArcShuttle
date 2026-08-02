@@ -7,6 +7,8 @@ from pathlib import Path
 
 import pytest
 
+from arcshuttle import __version__
+
 ROOT = Path(__file__).parents[1]
 PWSH = shutil.which("pwsh")
 
@@ -71,7 +73,7 @@ $manifest = Test-ModuleManifest -Path {ps_quote(manifest)}
     assert completed.returncode == 0, completed.stderr
     result = json.loads(completed.stdout)
     assert result["name"] == module_name
-    assert result["version"] == "0.2.0"
+    assert result["version"] == __version__
     assert result["powershell_version"] == "7.0"
     assert result["compatible_editions"] == ["Core"]
     assert set(result["exports"]) == expected_exports

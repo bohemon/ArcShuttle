@@ -6,12 +6,16 @@ import sys
 
 import pytest
 
+from arcshuttle import __version__
 from arcshuttle.cli import build_parser
 
 
 @pytest.mark.parametrize(
     ("module", "expected"),
-    [("arcshuttle", "arcshuttle 0.2.0"), ("parxtract", "parxtract 0.2.0")],
+    [
+        ("arcshuttle", f"arcshuttle {__version__}"),
+        ("parxtract", f"parxtract {__version__}"),
+    ],
 )
 def test_python_module_entry_points(module: str, expected: str) -> None:
     completed = subprocess.run(
