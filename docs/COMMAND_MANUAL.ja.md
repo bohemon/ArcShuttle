@@ -369,9 +369,95 @@ Get-ChildItem C:\Archives -File |
 
 PowerShell parameterは名前対応する:`-ArcShuttleCommand`、`-SevenZip`/`-7z`、`-OutputDir`、`-Existing`、`-CpuBudget`、`-MaxProcesses`、`-StorageProfile`、`-IoSlots`、`-HeavyThreads`、`-SmallThreshold`、`-InspectThreshold`、`-InspectTimeout`、`-ReservationDelay`、`-SequentialIfTotalBelow`、`-LogDir`、`-Config`、`-OnInputError`、`-Quiet`、`-FailFast`、`-AllowChanged`。create plan/combined functionは`-Format`と`-Level`も受ける。
 
-moduleはBOMなしUTF-8 NUL入力またはJSON Linesを一時fileへ書き、stdoutだけを`ConvertFrom-Json`し、stderrを再表示し、`$LASTEXITCODE`を保持し、`finally`で一時fileを削除する。
+moduleはBOMなしUTF-8 NUL入力またはJSON Linesを一時fileへ書き、native CLI stdoutだけを`ConvertFrom-Json`し、PowerShell success streamへ`PSCustomObject` recordを出力し、stderrを再表示し、`$LASTEXITCODE`を保持し、`finally`で一時fileを削除する。
 
-互換用`powershell/Parxtract.psm1`は`Invoke-ParxtractPlan`、`Invoke-ParxtractRun`、`Invoke-Parxtract`を維持する。
+互換用`powershell/Parxtract.psm1`は`Invoke-ParxtractPlan`、`Invoke-ParxtractRun`、`Invoke-Parxtract`を維持する。同じobject出力contractに従う。
+
+### 11.1 出力contractと永続化
+
+native CLIとPowerShell moduleは意図的に異なるsurfaceを公開する:
+
+| Surface | Success出力 | 主な用途 |
+|---|---|---|
+| `arcshuttle plan` / `parxtract plan` | canonical UTF-8 JSON Lines | portable manifest、永続保存、連結、PowerShell以外のtool |
+| `Invoke-ArcShuttle*Plan` / `Invoke-ParxtractPlan` | `PSCustomObject` record | PowerShellでの確認、編集、変数保持、object pipeline |
+
+同一PowerShell session内でplanして実行する場合はobjectのまま扱う:
+
+```powershell
+$plans = @(
+    Get-ChildItem C:\Archives -File |
+        Invoke-ArcShuttleExtractPlan
+)
+
+$plans | Select-Object plan_index, operation, source, destination
+$plans | Invoke-ArcShuttleRun
+```
+
+file拡張子はserializerを選択しない。次のcommandはPowerShell display formattingを起動し、manifestを作成**しない**:
+
+```powershell
+# 無効な永続化: file内容はJSON Linesではなく、情報を失ったdisplay formattingとなる。
+Get-ChildItem C:\Archives -File |
+    Invoke-ArcShuttleExtractPlan > extract.jsonl
+Get-ChildItem C:\Sources -Directory |
+    Invoke-ArcShuttleCreatePlan > create.jsonl
+Get-ChildItem C:\Archives -File |
+    Invoke-ParxtractPlan > legacy.jsonl
+```
+
+`name : value`、`@{...}`、`System.Object[]`のようなtextから安全に復元することはできない。このfileを`run`へ渡したり修復を試みたりせず、sourceから再planする。
+
+canonical JSON Linesが必要な場合はPowerShellからnative CLIを使う:
+
+```powershell
+$archives = @(
+    Get-ChildItem C:\Archives -File |
+        Select-Object -ExpandProperty FullName
+)
+$sources = @(
+    Get-ChildItem C:\Sources |
+        Select-Object -ExpandProperty FullName
+)
+
+arcshuttle plan extract -- $archives > extract.jsonl
+arcshuttle plan create --format 7z -- $sources > create.jsonl
+parxtract plan -- $archives > legacy-extract.jsonl
+
+Get-Content -LiteralPath .\extract.jsonl |
+    ConvertFrom-Json -Depth 100 |
+    Select-Object plan_index, operation, source, destination
+
+arcshuttle run --manifest .\extract.jsonl > results.jsonl
+```
+
+native command lineの上限を超えるpath集合には、3章のCLI `--files0-from`入力を使う。
+
+有効なJSON Lines manifestはrecord streamであり、PowerShell objectへparseせずに結合できる:
+
+```powershell
+Get-Content -LiteralPath .\extract-a.jsonl, .\extract-b.jsonl |
+    Set-Content -LiteralPath .\combined.jsonl -Encoding utf8NoBOM
+
+arcshuttle run --manifest .\combined.jsonl > results.jsonl
+```
+
+各入力fileは、空白でない物理行ごとに完全なJSON objectを1つだけ含む必要がある。ArcShuttleはjob開始前に結合manifest全体を検証する。重複する`job_id`とoutput collisionは拒否する。独立したplan間では`plan_index`が重複してもよい。`plan_index`は`integrity`で保護されるため、連番へ振り直してはならない。
+
+PowerShell専用のsession間snapshotには、CLIXMLでobjectを明示的にserializeする:
+
+```powershell
+$planA | Export-Clixml -LiteralPath .\plan-a.clixml -Depth 100
+$planB | Export-Clixml -LiteralPath .\plan-b.clixml -Depth 100
+
+$plans = @(
+    Import-Clixml -LiteralPath .\plan-a.clixml
+    Import-Clixml -LiteralPath .\plan-b.clixml
+)
+$plans | Invoke-ArcShuttleRun
+```
+
+同じpatternを`Invoke-ParxtractPlan`と`Invoke-ParxtractRun`にも使える。CLIXMLはPowerShell object snapshotであり、ArcShuttle manifestではない。`arcshuttle run --manifest`は受理せず、完全なCLIXML documentをraw textとして連結することもできない。各snapshotをimportし、得られたobject listを結合する。deserialize後のobjectはrun commandに必要なmanifest data propertyを保持するが、元のmethodを持つlive objectではなくsnapshotである。
 
 ## 12. POSIX例
 

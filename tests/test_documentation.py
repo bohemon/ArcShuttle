@@ -133,6 +133,35 @@ def test_command_manual_covers_safety_compatibility_and_automation_contracts(
     assert missing == []
 
 
+@pytest.mark.parametrize("manual", MANUALS, ids=("en", "ja"))
+def test_command_manual_defines_powershell_output_and_persistence_contracts(
+    manual: Path,
+) -> None:
+    text = manual.read_text(encoding="utf-8")
+    required_terms = (
+        "PSCustomObject",
+        "display formatting",
+        "Invoke-ArcShuttleExtractPlan >",
+        "Invoke-ArcShuttleCreatePlan >",
+        "Invoke-ParxtractPlan >",
+        "arcshuttle plan extract --",
+        "arcshuttle plan create --format",
+        "parxtract plan --",
+        "ConvertFrom-Json",
+        "Export-Clixml",
+        "Import-Clixml",
+        "CLIXML",
+        "`job_id`",
+        "output collision",
+        "`plan_index`",
+        "`integrity`",
+        "Invoke-ParxtractRun",
+    )
+    assert [term for term in required_terms if term not in text] == []
+    duplicate_term = "Duplicate" if manual.name.endswith(".en.md") else "重複"
+    assert duplicate_term in text
+
+
 def test_readme_has_required_arcshuttle_opening_and_migration_notes() -> None:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
 

@@ -369,9 +369,95 @@ Get-ChildItem C:\Archives -File |
 
 PowerShell parameters map by name: `-ArcShuttleCommand`, `-SevenZip`/`-7z`, `-OutputDir`, `-Existing`, `-CpuBudget`, `-MaxProcesses`, `-StorageProfile`, `-IoSlots`, `-HeavyThreads`, `-SmallThreshold`, `-InspectThreshold`, `-InspectTimeout`, `-ReservationDelay`, `-SequentialIfTotalBelow`, `-LogDir`, `-Config`, `-OnInputError`, `-Quiet`, `-FailFast`, and `-AllowChanged`. Create plan/combined functions also accept `-Format` and `-Level`.
 
-The module writes BOM-free UTF-8 NUL input or JSON Lines to temporary files, converts stdout with `ConvertFrom-Json`, replays stderr, preserves `$LASTEXITCODE`, and removes temporary files in `finally`.
+The module writes BOM-free UTF-8 NUL input or JSON Lines to temporary files, converts native CLI stdout with `ConvertFrom-Json`, emits `PSCustomObject` records on the PowerShell success stream, replays stderr, preserves `$LASTEXITCODE`, and removes temporary files in `finally`.
 
-`powershell/Parxtract.psm1` remains available with `Invoke-ParxtractPlan`, `Invoke-ParxtractRun`, and `Invoke-Parxtract` for legacy examples.
+`powershell/Parxtract.psm1` remains available with `Invoke-ParxtractPlan`, `Invoke-ParxtractRun`, and `Invoke-Parxtract` for legacy examples. It follows the same object-output contract.
+
+### 11.1 Output contracts and persistence
+
+The native CLI and PowerShell module expose intentionally different surfaces:
+
+| Surface | Success output | Primary use |
+|---|---|---|
+| `arcshuttle plan` / `parxtract plan` | canonical UTF-8 JSON Lines | portable manifests, durable storage, concatenation, and non-PowerShell tools |
+| `Invoke-ArcShuttle*Plan` / `Invoke-ParxtractPlan` | `PSCustomObject` records | PowerShell inspection, editing, variables, and object pipelines |
+
+Keep plans as objects when planning and running in one PowerShell session:
+
+```powershell
+$plans = @(
+    Get-ChildItem C:\Archives -File |
+        Invoke-ArcShuttleExtractPlan
+)
+
+$plans | Select-Object plan_index, operation, source, destination
+$plans | Invoke-ArcShuttleRun
+```
+
+A filename extension does not select a serializer. These commands invoke PowerShell display formatting and **do not** create manifests:
+
+```powershell
+# Invalid persistence: the files contain lossy display formatting, not JSON Lines.
+Get-ChildItem C:\Archives -File |
+    Invoke-ArcShuttleExtractPlan > extract.jsonl
+Get-ChildItem C:\Sources -Directory |
+    Invoke-ArcShuttleCreatePlan > create.jsonl
+Get-ChildItem C:\Archives -File |
+    Invoke-ParxtractPlan > legacy.jsonl
+```
+
+Text such as `name : value`, `@{...}`, or `System.Object[]` cannot be safely reconstructed. Do not pass such a file to `run` and do not attempt to repair it; re-plan from the sources.
+
+Use the native CLI from PowerShell when canonical JSON Lines are required:
+
+```powershell
+$archives = @(
+    Get-ChildItem C:\Archives -File |
+        Select-Object -ExpandProperty FullName
+)
+$sources = @(
+    Get-ChildItem C:\Sources |
+        Select-Object -ExpandProperty FullName
+)
+
+arcshuttle plan extract -- $archives > extract.jsonl
+arcshuttle plan create --format 7z -- $sources > create.jsonl
+parxtract plan -- $archives > legacy-extract.jsonl
+
+Get-Content -LiteralPath .\extract.jsonl |
+    ConvertFrom-Json -Depth 100 |
+    Select-Object plan_index, operation, source, destination
+
+arcshuttle run --manifest .\extract.jsonl > results.jsonl
+```
+
+For path sets too large for a native command line, use the CLI's `--files0-from` input described in section 3.
+
+Valid JSON Lines manifests are record streams and may be combined without parsing them into PowerShell objects:
+
+```powershell
+Get-Content -LiteralPath .\extract-a.jsonl, .\extract-b.jsonl |
+    Set-Content -LiteralPath .\combined.jsonl -Encoding utf8NoBOM
+
+arcshuttle run --manifest .\combined.jsonl > results.jsonl
+```
+
+Every input file must already contain exactly one complete JSON object per nonblank physical line. ArcShuttle validates the complete combined manifest before starting any job. Duplicate `job_id` values and output collision are rejected. Independent plans may repeat `plan_index` values; do not renumber them because `plan_index` is protected by `integrity`.
+
+For a PowerShell-only snapshot across sessions, serialize the objects explicitly with CLIXML:
+
+```powershell
+$planA | Export-Clixml -LiteralPath .\plan-a.clixml -Depth 100
+$planB | Export-Clixml -LiteralPath .\plan-b.clixml -Depth 100
+
+$plans = @(
+    Import-Clixml -LiteralPath .\plan-a.clixml
+    Import-Clixml -LiteralPath .\plan-b.clixml
+)
+$plans | Invoke-ArcShuttleRun
+```
+
+The same pattern works with `Invoke-ParxtractPlan` and `Invoke-ParxtractRun`. CLIXML is a PowerShell object snapshot, not an ArcShuttle manifest: `arcshuttle run --manifest` does not accept it, and complete CLIXML documents cannot be concatenated as raw text. Import each snapshot and combine the resulting object lists instead. Deserialized objects preserve the manifest data properties needed by the run commands but are snapshots rather than live objects with their original methods.
 
 ## 12. POSIX examples
 
