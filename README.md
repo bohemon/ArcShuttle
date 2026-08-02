@@ -148,6 +148,8 @@ Get-ChildItem C:\Data -Directory |
 
 The module exports `Invoke-ArcShuttleExtractPlan`, `Invoke-ArcShuttleCreatePlan`, `Invoke-ArcShuttleRun`, `Invoke-ArcShuttleExtract`, and `Invoke-ArcShuttleCreate`. It uses BOM-free UTF-8 temporary files, converts JSON Lines to objects, replays stderr, preserves `$LASTEXITCODE`, and removes temporary files in `finally`.
 
+PowerShell plan commands emit `PSCustomObject` records for object pipelines, not manifest text. Do not redirect their output to a `.jsonl` filename: PowerShell display formatting is not serialization. Use the native `arcshuttle plan` CLI for canonical, portable JSON Lines, or `Export-Clixml` for a PowerShell-only object snapshot. The [PowerShell output and persistence contract](docs/COMMAND_MANUAL.en.md#111-output-contracts-and-persistence) documents save, combine, inspect, and run workflows.
+
 The Release asset also installs the `Parxtract` compatibility module and its three `Invoke-Parxtract*` functions. See the [installation guides](docs/INSTALLATION.en.md) for the checksum-verified setup.
 
 ## Development and dependency policy

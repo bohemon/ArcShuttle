@@ -143,6 +143,7 @@ $plans = @(
 $savedExit = $LASTEXITCODE
 [pscustomobject]@{{
     count = $plans.Count
+    type_names = @($plans | ForEach-Object {{ $_.PSObject.TypeNames[0] }})
     operations = @($plans.operation)
     paths = @($plans.source_path)
     arguments = @($plans[0].arguments)
@@ -157,6 +158,10 @@ $savedExit = $LASTEXITCODE
     assert completed.returncode == 0, completed.stderr
     result = json.loads(completed.stdout)
     assert result["count"] == 2
+    assert result["type_names"] == [
+        "System.Management.Automation.PSCustomObject",
+        "System.Management.Automation.PSCustomObject",
+    ]
     assert result["operations"] == ["create", "create"]
     assert result["paths"] == [str(source_dir), str(source_file)]
     assert result["arguments"][:4] == ["plan", "create", "--files0-from", result["arguments"][3]]
@@ -207,6 +212,70 @@ $savedExit = $LASTEXITCODE
     assert "--fail-fast" in result["arguments"]
     assert result["has_bom"] is False
     assert result["temporary_exists"] is False
+    assert result["exit_code"] == 9
+    assert "fake run diagnostic" in completed.stderr
+
+
+def test_clixml_snapshots_combine_into_object_run_pipeline(tmp_path: Path) -> None:
+    module = ROOT / "powershell" / "ArcShuttle.psm1"
+    archive = tmp_path / "archive.zip"
+    archive.write_bytes(b"archive")
+    source_dir = tmp_path / "source"
+    source_dir.mkdir()
+    extract_snapshot = tmp_path / "extract.clixml"
+    create_snapshot = tmp_path / "create.clixml"
+    script = f"""
+Import-Module {ps_quote(module)} -Force
+{FAKE_ARCSHUTTLE}
+$extractPlan = @(
+    Get-Item -LiteralPath {ps_quote(archive)} |
+        Invoke-ArcShuttleExtractPlan -ArcShuttleCommand Invoke-FakeArcShuttle
+)
+$createPlan = @(
+    Get-Item -LiteralPath {ps_quote(source_dir)} |
+        Invoke-ArcShuttleCreatePlan -ArcShuttleCommand Invoke-FakeArcShuttle `
+            -Format 7z -Level 5
+)
+$extractPlan | Export-Clixml -LiteralPath {ps_quote(extract_snapshot)} -Depth 100
+$createPlan | Export-Clixml -LiteralPath {ps_quote(create_snapshot)} -Depth 100
+$restored = @(
+    Import-Clixml -LiteralPath {ps_quote(extract_snapshot)}
+    Import-Clixml -LiteralPath {ps_quote(create_snapshot)}
+)
+$records = @(
+    $restored | Invoke-ArcShuttleRun -ArcShuttleCommand Invoke-FakeArcShuttle
+)
+$savedExit = $LASTEXITCODE
+[pscustomobject]@{{
+    restored_count = $restored.Count
+    restored_operations = @($restored.operation)
+    restored_type_names = @($restored | ForEach-Object {{ $_.PSObject.TypeNames[0] }})
+    restored_argument_roots = @($restored | ForEach-Object {{ $_.arguments[0] }})
+    record_types = @($records.record_type)
+    run_operations = @($records[0].operations)
+    run_count = $records[0].count
+    run_has_bom = [bool]$records[0].has_bom
+    run_temporary_exists = Test-Path -LiteralPath $records[0].temporary_path
+    exit_code = $savedExit
+}} | ConvertTo-Json -Compress -Depth 100
+"""
+
+    completed = run_script(tmp_path, script)
+
+    assert completed.returncode == 0, completed.stderr
+    result = json.loads(completed.stdout)
+    assert result["restored_count"] == 2
+    assert result["restored_operations"] == ["extract", "create"]
+    assert result["restored_type_names"] == [
+        "Deserialized.System.Management.Automation.PSCustomObject",
+        "Deserialized.System.Management.Automation.PSCustomObject",
+    ]
+    assert result["restored_argument_roots"] == ["plan", "plan"]
+    assert result["record_types"] == ["result", "summary"]
+    assert result["run_operations"] == ["extract", "create"]
+    assert result["run_count"] == 2
+    assert result["run_has_bom"] is False
+    assert result["run_temporary_exists"] is False
     assert result["exit_code"] == 9
     assert "fake run diagnostic" in completed.stderr
 
