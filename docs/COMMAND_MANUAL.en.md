@@ -2,7 +2,7 @@
 title: ArcShuttle Command and Option Manual
 language: en
 manual_version: 2
-applies_to_cli_version: 0.3.1
+applies_to_cli_version: 0.3.2
 jsonl_schema_version: 2
 audience:
   - human
@@ -18,7 +18,7 @@ source_of_truth:
 
 # ArcShuttle command and option manual
 
-This is the normative human/AI reference for ArcShuttle 0.3.1. “Must,” “must not,” and “may only” describe requirements. Stdout means the process standard-output byte stream; stderr means standard error.
+This is the normative human/AI reference for ArcShuttle 0.3.2. “Must,” “must not,” and “may only” describe requirements. Stdout means the process standard-output byte stream; stderr means standard error.
 
 This manual uses regular text for general English and for ArcShuttle concepts after they are defined. Exact commands, options, fields, values, messages, and filenames use code formatting. The bold entries below define the main ArcShuttle concepts used throughout the manual.
 

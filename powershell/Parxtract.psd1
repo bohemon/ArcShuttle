@@ -1,6 +1,6 @@
 @{
     RootModule = 'Parxtract.psm1'
-    ModuleVersion = '0.3.1'
+    ModuleVersion = '0.3.2'
     GUID = '17bbb106-56d9-473c-b20f-1d044d0f8031'
     Author = 'ArcShuttle contributors'
     CompanyName = 'ArcShuttle contributors'
@@ -19,9 +19,9 @@
     PrivateData = @{
         PSData = @{
             Tags = @('ArcShuttle', 'Parxtract', 'Archive', 'Compatibility')
-            LicenseUri = 'https://github.com/bohemon/ArcShuttle/blob/v0.3.1/LICENSE'
+            LicenseUri = 'https://github.com/bohemon/ArcShuttle/blob/v0.3.2/LICENSE'
             ProjectUri = 'https://github.com/bohemon/ArcShuttle'
-            ReleaseNotes = 'https://github.com/bohemon/ArcShuttle/releases/tag/v0.3.1'
+            ReleaseNotes = 'https://github.com/bohemon/ArcShuttle/releases/tag/v0.3.2'
         }
     }
 }
