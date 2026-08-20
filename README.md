@@ -15,10 +15,10 @@ The normative references are the [English command manual](docs/COMMAND_MANUAL.en
 
 ## Install
 
-Install the published v0.3.1 Release wheel in an isolated environment with [`pipx`](https://pipx.pypa.io/):
+Install the published v0.3.2 Release wheel in an isolated environment with [`pipx`](https://pipx.pypa.io/):
 
 ```sh
-pipx install "https://github.com/bohemon/ArcShuttle/releases/download/v0.3.1/arcshuttle-0.3.1-py3-none-any.whl"
+pipx install "https://github.com/bohemon/ArcShuttle/releases/download/v0.3.2/arcshuttle-0.3.2-py3-none-any.whl"
 arcshuttle --version
 ```
 

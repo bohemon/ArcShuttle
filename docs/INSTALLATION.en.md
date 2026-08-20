@@ -1,7 +1,7 @@
 # ArcShuttle Installation Guide
 
 This guide focuses on stable end-user installation without a source checkout. Commands are pinned
-to v0.3.1 so an installation does not change when `main` changes. Tagged-source installation and
+to v0.3.2 so an installation does not change when `main` changes. Tagged-source installation and
 a development checkout are listed separately as alternatives.
 
 ## Requirements
@@ -19,7 +19,7 @@ a development checkout are listed separately as alternatives.
 application and exposes its commands on `PATH`. After installing pipx for your platform, run:
 
 ```sh
-pipx install "https://github.com/bohemon/ArcShuttle/releases/download/v0.3.1/arcshuttle-0.3.1-py3-none-any.whl"
+pipx install "https://github.com/bohemon/ArcShuttle/releases/download/v0.3.2/arcshuttle-0.3.2-py3-none-any.whl"
 arcshuttle --version
 parxtract --version
 ```
@@ -27,7 +27,7 @@ parxtract --version
 Upgrade or reinstall this pinned release with:
 
 ```sh
-pipx install --force "https://github.com/bohemon/ArcShuttle/releases/download/v0.3.1/arcshuttle-0.3.1-py3-none-any.whl"
+pipx install --force "https://github.com/bohemon/ArcShuttle/releases/download/v0.3.2/arcshuttle-0.3.2-py3-none-any.whl"
 ```
 
 Remove it with `pipx uninstall arcshuttle`.
@@ -37,7 +37,7 @@ Remove it with `pipx uninstall arcshuttle`.
 Activate the environment, then install the Release wheel directly:
 
 ```sh
-python -m pip install "https://github.com/bohemon/ArcShuttle/releases/download/v0.3.1/arcshuttle-0.3.1-py3-none-any.whl"
+python -m pip install "https://github.com/bohemon/ArcShuttle/releases/download/v0.3.2/arcshuttle-0.3.2-py3-none-any.whl"
 arcshuttle --version
 ```
 
@@ -51,7 +51,7 @@ Use a tag or commit when the Release wheel is unsuitable but a reproducible sour
 is required:
 
 ```sh
-pipx install "arcshuttle @ git+https://github.com/bohemon/ArcShuttle.git@v0.3.1"
+pipx install "arcshuttle @ git+https://github.com/bohemon/ArcShuttle.git@v0.3.2"
 ```
 
 Replace `pipx install` with `python -m pip install` inside an existing virtual environment.
@@ -60,12 +60,12 @@ end-user installation.
 
 ## Install the PowerShell modules
 
-The v0.3.1 Release contains both `ArcShuttle` and the `Parxtract` compatibility module. The
+The v0.3.2 Release contains both `ArcShuttle` and the `Parxtract` compatibility module. The
 following PowerShell 7 commands download the archive and its checksum, verify it, and install the
 versioned module directories for the current user. They never execute downloaded text.
 
 ```powershell
-$version = '0.3.1'
+$version = '0.3.2'
 $release = "https://github.com/bohemon/ArcShuttle/releases/download/v$version"
 $assetName = "ArcShuttle-PowerShell-$version.zip"
 $downloadDir = Join-Path ([System.IO.Path]::GetTempPath()) "ArcShuttle-$version"
@@ -101,7 +101,7 @@ Python or 7-Zip. Import the compatibility module with
 To remove the modules, close sessions using them and delete only these version directories:
 
 ```powershell
-$removeVersion = '0.3.1'
+$removeVersion = '0.3.2'
 if ($IsWindows) {
     $moduleRoot = Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'PowerShell\Modules'
 } else {

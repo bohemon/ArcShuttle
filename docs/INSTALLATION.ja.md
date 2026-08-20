@@ -1,7 +1,7 @@
 # ArcShuttle インストールガイド
 
 このガイドでは、ソースコードをチェックアウトせずに行う、エンドユーザー向けの安定した
-インストール方法を中心に説明する。コマンドはv0.3.1に固定し、`main`ブランチの変更によって
+インストール方法を中心に説明する。コマンドはv0.3.2に固定し、`main`ブランチの変更によって
 インストール結果が変わらないようにしている。タグ付きソースからのインストールと開発用
 チェックアウトは、別の選択肢として後半で説明する。
 
@@ -21,7 +21,7 @@
 インストールした後、次を実行する：
 
 ```sh
-pipx install "https://github.com/bohemon/ArcShuttle/releases/download/v0.3.1/arcshuttle-0.3.1-py3-none-any.whl"
+pipx install "https://github.com/bohemon/ArcShuttle/releases/download/v0.3.2/arcshuttle-0.3.2-py3-none-any.whl"
 arcshuttle --version
 parxtract --version
 ```
@@ -29,7 +29,7 @@ parxtract --version
 同じバージョンを更新または再インストールする場合は、次を実行する：
 
 ```sh
-pipx install --force "https://github.com/bohemon/ArcShuttle/releases/download/v0.3.1/arcshuttle-0.3.1-py3-none-any.whl"
+pipx install --force "https://github.com/bohemon/ArcShuttle/releases/download/v0.3.2/arcshuttle-0.3.2-py3-none-any.whl"
 ```
 
 削除は`pipx uninstall arcshuttle`で行う。
@@ -39,7 +39,7 @@ pipx install --force "https://github.com/bohemon/ArcShuttle/releases/download/v0
 仮想環境を有効化し、GitHubリリースのwheelファイルを直接インストールする：
 
 ```sh
-python -m pip install "https://github.com/bohemon/ArcShuttle/releases/download/v0.3.1/arcshuttle-0.3.1-py3-none-any.whl"
+python -m pip install "https://github.com/bohemon/ArcShuttle/releases/download/v0.3.2/arcshuttle-0.3.2-py3-none-any.whl"
 arcshuttle --version
 ```
 
@@ -54,7 +54,7 @@ GitHubリリースのwheelファイルが適さず、ソースから再現可能
 タグまたはコミットを指定する：
 
 ```sh
-pipx install "arcshuttle @ git+https://github.com/bohemon/ArcShuttle.git@v0.3.1"
+pipx install "arcshuttle @ git+https://github.com/bohemon/ArcShuttle.git@v0.3.2"
 ```
 
 既存の仮想環境では、`pipx install`を`python -m pip install`へ置き換える。`@main`からの
@@ -63,13 +63,13 @@ pipx install "arcshuttle @ git+https://github.com/bohemon/ArcShuttle.git@v0.3.1"
 
 ## PowerShell モジュールのインストール
 
-v0.3.1のリリースには、`ArcShuttle`モジュールと互換用の`Parxtract`モジュールが含まれる。
+v0.3.2のリリースには、`ArcShuttle`モジュールと互換用の`Parxtract`モジュールが含まれる。
 次のコマンドをPowerShell 7で実行すると、アーカイブとチェックサムをダウンロードして検証した後、
 `CurrentUser`用のバージョン別モジュールディレクトリへインストールする。ダウンロードした
 テキストを実行することはない。
 
 ```powershell
-$version = '0.3.1'
+$version = '0.3.2'
 $release = "https://github.com/bohemon/ArcShuttle/releases/download/v$version"
 $assetName = "ArcShuttle-PowerShell-$version.zip"
 $downloadDir = Join-Path ([System.IO.Path]::GetTempPath()) "ArcShuttle-$version"
@@ -106,7 +106,7 @@ PowerShell モジュールはPythonや7-Zipを同梱せず、`arcshuttle` CLIを
 削除する：
 
 ```powershell
-$removeVersion = '0.3.1'
+$removeVersion = '0.3.2'
 if ($IsWindows) {
     $moduleRoot = Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'PowerShell\Modules'
 } else {
