@@ -38,12 +38,14 @@ def config(root: Path) -> Config:
     ("archive_format", "method_switch"),
     [("7z", "-m0=LZMA2"), ("zip", "-mm=Deflate")],
 )
-def test_fake7z_create_uses_relative_source_and_verifies(
+@pytest.mark.parametrize("compression_level", [0, 9])
+def test_fake7z_create_uses_relative_source_and_verifies_without_password(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     source_kind: str,
     archive_format: str,
     method_switch: str,
+    compression_level: int,
 ) -> None:
     source = tmp_path / ("file with space.dat" if source_kind == "file" else "directory with space")
     if source_kind == "file":
@@ -56,7 +58,11 @@ def test_fake7z_create_uses_relative_source_and_verifies(
     state = tmp_path / "state"
     monkeypatch.setenv("FAKE7Z_CONFIG", str(fake_config))
     monkeypatch.setenv("FAKE7Z_STATE", str(state))
-    resolved = replace(config(tmp_path), create_format=archive_format)
+    resolved = replace(
+        config(tmp_path),
+        create_format=archive_format,
+        compression_level=compression_level,
+    )
     job = validate_manifest(make_create_plan([source], resolved).jobs, resolved)[0]
 
     results, _, code = execute_manifest([job], resolved, fake_runner())
@@ -67,10 +73,17 @@ def test_fake7z_create_uses_relative_source_and_verifies(
     test_state = json.loads(next(state.glob("t-*.json")).read_text(encoding="utf-8"))
     assert create_state["source_argument"] == (source.name if source_kind == "file" else ".")
     assert create_state["cwd"] == str(source.parent if source_kind == "file" else source)
-    assert "-mmt=3" in create_state["args"]
-    assert method_switch in create_state["args"]
+    expected_threads = 1 if compression_level == 0 else 3
+    assert f"-mmt={expected_threads}" in create_state["args"]
+    assert f"-mx={compression_level}" in create_state["args"]
+    if compression_level == 0:
+        assert not any(argument.startswith(("-m0=", "-mm=")) for argument in create_state["args"])
+    else:
+        assert method_switch in create_state["args"]
+    assert not any(argument.startswith("-p") for argument in create_state["args"])
     assert Path(create_state["args"][create_state["args"].index("--") + 1]).parent != source
     assert test_state["args"][0] == "t"
+    assert not any(argument.startswith("-p") for argument in test_state["args"])
     logs = Path(results[0]["log_path"])
     assert {path.name for path in logs.iterdir()} == {
         "metadata.json",
@@ -83,21 +96,3 @@ def test_fake7z_create_uses_relative_source_and_verifies(
     assert metadata["create"]["exit_code"] == 0
     assert metadata["test"]["exit_code"] == 0
     assert metadata["commit"]["status"] == "committed"
-
-
-def test_level_zero_uses_7zip_store_mode_without_a_compression_method(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    source = tmp_path / "source.dat"
-    source.write_bytes(b"source")
-    state = tmp_path / "state"
-    monkeypatch.setenv("FAKE7Z_STATE", str(state))
-    resolved = replace(config(tmp_path), compression_level=0)
-    job = validate_manifest(make_create_plan([source], resolved).jobs, resolved)[0]
-
-    results, _, code = execute_manifest([job], resolved, fake_runner())
-
-    assert (code, results[0]["status"]) == (0, "success")
-    create_args = json.loads(next(state.glob("a-*.json")).read_text(encoding="utf-8"))["args"]
-    assert "-mx=0" in create_args
-    assert not any(argument.startswith(("-m0=", "-mm=")) for argument in create_args)

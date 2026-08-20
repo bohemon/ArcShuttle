@@ -304,7 +304,6 @@ class SevenZip:
             f"-t{archive_format}",
             f"-mx={compression_level}",
             f"-mmt={threads}",
-            "-p-",
             "--",
             str(archive),
             source_argument,
@@ -356,7 +355,7 @@ class SevenZip:
     ) -> ProcessOutcome:
         """Verify one staged archive before it is committed."""
 
-        arguments = ["t", "-bd", "-bb1", "-bso1", "-bse1", "-bsp0", "-p-", "--", str(archive)]
+        arguments = ["t", "-bd", "-bb1", "-bso1", "-bse1", "-bsp0", "--", str(archive)]
         command = self._command(arguments)
         started = utc_now()
         outcome = self._run_logged(
